@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<!-- © 2026 Supervisório MQTT — Inova Agro UFPel EMBRAPII. Código aberto; cópias permitidas desde que citadas. -->
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testes — Supervisório MQTT</title>
+<style>
+ body { font-family: 'Segoe UI', Arial, sans-serif; margin: 1.5rem; color: #1d2b2b; }
+ h1 { color: #085357; font-size: 1.3rem; }
+ #resultado { font-weight: 700; margin: 0.6rem 0 1rem; }
+ li.ok { color: #1f5f45; } li.falha { color: #b3261e; font-weight: 600; }
+ li small { display: block; color: #6b7a78; font-weight: 400; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Testes automáticos — Supervisório MQTT</h1>
+<p>Abra esta página pelo servidor (GitHub Pages ou <code>python3 -m http.server</code>). Os testes usam uma configuração e um banco de histórico próprios: não mexem nos seus dados.</p>
+<div id="resultado">Rodando…</div>
+<ol id="lista"></ol>
+<div id="app" hidden></div><div id="aviso" hidden></div><nav id="menu" hidden></nav>
+<script>window.SUP_TESTES = true;</script>
+<script src="../lib/jszip.min.js"></script>
+<script src="../js/dados.js"></script>
+<script src="../js/expr.js"></script>
+<script src="../js/mqtt.js"></script>
+<script src="../js/historico.js"></script>
+<script src="../js/alarmes.js"></script>
+<script src="../js/controle.js"></script>
+<script src="../js/runtime.js"></script>
+<script src="../js/simulador.js"></script>
+<script src="../js/icones.js"></script>
+<script src="../js/grafico.js"></script>
+<script src="../js/sinotico.js"></script>
+<script src="../js/modelos.js"></script>
+<script src="../js/nuvem.js"></script>
+<script src="../js/app.js"></script>
+<script src="../js/paginas.js"></script>
+<script src="../js/configurar.js"></script>
+<script src="../js/controle-ui.js"></script>
+<script src="../js/relatorio.js"></script>
+<script src="testes.js"></script>
+</body>
+</html>

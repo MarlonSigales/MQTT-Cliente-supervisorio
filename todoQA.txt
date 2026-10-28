@@ -1,0 +1,108 @@
+© 2026 Supervisório MQTT — Inova Agro UFPel EMBRAPII. Código aberto; cópias permitidas desde que citadas.
+
+TODO / QA — Supervisório MQTT (cliente MQTT supervisório)
+Marcadores: [fazer] [futuro] [resolvido] [rejeitado] [parcial]
+Atualizado em 28/10/2026 (versão 1). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
+
+=== DIRETRIZES PERMANENTES
+- SIMPLES PARA QUALQUER UM: um operador de unidade armazenadora tem que conseguir usar sem ler manual.
+  Antes de fechar qualquer item, responder: (1) dá para fazer só clicando, sem digitar? (2) o que der para deduzir (tipo da
+  variável pelo tópico, equação de orvalho/potência/energia pelas variáveis que existem, equipamento ao desenhar o símbolo)
+  já vem preenchido? (3) o botão principal da tela é óbvio e diz o que acontece? (4) o texto evita jargão ou explica o termo
+  em meia frase? (5) a pessoa sabe o que está errado (equação mostra o erro enquanto digita; controlador diz por que parou)?
+  Se alguma resposta for "não", o item não está pronto.
+- Pré-preencher sempre, nunca apagar: modelos prontos e preenchimentos automáticos só completam o que está vazio.
+- IHM pela ISA-101 (alto desempenho): fundo neutro, valores em texto escuro; cor forte SÓ para alarme/anormalidade;
+  estado do equipamento por tom (desligado claro, em vazio cinza tracejado, trabalhando petróleo); toda variável com a barra
+  da faixa e os limites marcados.
+- Alarmes pela ISA-18.2 / IEC 62682: prioridade (urgente, alta, média, aviso), atraso, histerese, reconhecimento, supressão
+  com motivo e registro, "um alarme por problema" (HH não liga H junto), meta EEMUA 191 (≤ 1 alarme a cada 10 min).
+- Gráficos: uma faixa por unidade (nunca dois eixos y), cores em ordem fixa que seguem a variável (paleta validada),
+  no máximo 8 séries, legenda clicável, valor sob o cursor.
+- Comando nunca some em silêncio: sem conexão, a tela avisa e registra no log; chave com confirmação (segurança NR-12).
+- Controle no supervisório é para referências e malhas lentas: o crítico fica no CLP/embarcado; Last Will avisa o campo.
+- Configuração só pelo objeto SUP (js/dados.js); mudou a estrutura: subir SUP_VERSAO e completar normalizarProjeto.
+- Texto do usuário sempre por esc()/escAttr() (telas, SVG, relatório, CSV).
+- Senhas: broker só neste navegador (Senhas), nunca no arquivo nem na nuvem; MEGA pelo gerenciador de senhas do navegador.
+- Todo dado novo entra no arquivo (configuracao.json), no relatório quando couber, nos modelos prontos e ganha teste (tests/testes.js).
+- Todo arquivo novo começa com a linha de direitos autorais. Sem CDN: bibliotecas em lib/ (exceção já existente: megajs,
+  carregado só ao usar a nuvem, igual ao Projeto Conceitual). Trocar o ?v= ao publicar.
+- Testar em 360, 768, 1024 e 1920 px: nada sai da tela.
+
+=== O QUE FALTA (do mais simples para o mais difícil)
+24 [fazer] Testar com o broker real da unidade (EMQX/Mosquitto com usuário, senha e wss). Daqui foi testado com o broker de
+   teste do projeto (tests/broker-ws.js): entrada recusada por senha, leitura (número com vírgula e JSON), comando, Last Will e
+   reconexão depois de derrubar o broker. Se der erro, anotar a mensagem que aparece no chip da conexão.
+25 [fazer] Testar a nuvem com a conta MEGA real da equipe (configuração, envio do histórico por dia e "trazer da nuvem").
+   Feito e testado com um MEGA simulado (mesma interface do megajs); este ambiente não acessa o MEGA.
+26 [futuro] Perfis de acesso: operador (vê e reconhece), técnico (comanda), engenheiro (configura e liga controladores), com
+   senha local para comandos e configuração.
+27 [futuro] Mapa da termometria do silo: um sensor por cabo e por altura (tópicos silo1/cabo3/s5), com mapa de calor do
+   silo, maior temperatura por cabo e alerta de "ponto quente" (aumento > x °C/dia), que é o que o armazenador mais olha.
+28 [futuro] Secagem por lote/receita: início e fim da carga, umidade de entrada e saída, consumo de lenha/GLP e energia por
+   tonelada seca (indicador de eficiência), relatório por lote.
+29 [futuro] Agente de borda 24 h (Raspberry Pi, ESP32 ou Node-RED) rodando os mesmos controladores, horímetros e o envio do
+   histórico para o MEGA quando a página está fechada; o supervisório passa a ler o histórico dele. Hoje tudo depende de um
+   computador com a página aberta (avisado na tela Nuvem e no relatório dos horímetros).
+30 [futuro] Tópicos em lote (um JSON com várias leituras, Sparkplug B), MQTT 5 e publicação QoS 2.
+31 [futuro] Funcionar sem internet como aplicativo instalável (PWA) e importar CSV de dados de outro sistema.
+
+=== REJEITADO
+(nenhum)
+
+=== FEITO
+--- Versão 1 (28/10/2026)
+01 [resolvido] Cliente MQTT 3.1.1 sobre WebSocket próprio (sem biblioteca): QoS 0/1/2 na recepção, QoS 0/1 no envio,
+   reconexão com espera crescente e reassinatura, keepalive, usuário/senha, Last Will (<prefixo>/supervisorio/status),
+   mensagens claras para os erros comuns (porta/caminho errados, ws:// em página https, senha recusada).
+02 [resolvido] Várias plantas ao mesmo tempo, cada uma com a sua conexão, prefixo de tópicos e cor; menu com a bolinha de
+   conexão de cada uma; Visão geral com resumo (alarmes, trabalhando/vazio/desligado, potência total).
+03 [resolvido] Variáveis com nome próprio editável (no cartão e em Configurar), ícone por tipo (umidade, temperatura,
+   umidade do grão, CO₂, pressão, ponto de orvalho, peso, volume, nível, vazão, velocidade, rotação, aceleração, potência,
+   energia, corrente, tensão, fator de potência, frequência, estado, %, equação), unidade, casas, escala e deslocamento,
+   campo do JSON, faixa, limites de alarme e gravação (banda morta, intervalos mínimo e máximo).
+04 [resolvido] Origens: MQTT, equação (ponto de orvalho por Magnus, pot_tri/pot_mono, entalpia, umidade absoluta, se/e/ou,
+   variáveis de outra planta), integral (energia = ∫ potência), saída de controlador e valor digitado. Equação conferida
+   enquanto digita (mostra o erro ou o valor atual); ordem de cálculo por dependência e aviso de dependência circular.
+05 [resolvido] Passar o mouse num valor (cartão ou sinótico) mostra o balão com o histórico da última hora (mín., média,
+   máx.); clicar abre o gráfico.
+06 [resolvido] Tela de gráficos: escolha por planta/área/equipamento, 15 min a 30 dias ou intervalo livre, ao vivo,
+   zoom em X (roda, botões, pinça horizontal) e em Y (Shift + roda, botões, pinça vertical), arrastar, zoom em caixa,
+   ajustar, valor sob o cursor, limites de alarme tracejados, conjuntos salvos, CSV e PNG; estado do equipamento como série.
+07 [resolvido] Logs: eventos guardados (conexão, comando, controle, publicação, alarme, estado, horímetro, nuvem) com filtro
+   e CSV; Monitor MQTT (chegou/enviou, pausar, filtrar); Publicar à mão; Descobrir tópicos (assina prefixo/#, adivinha o tipo
+   e cria a variável com um clique ou todas de uma vez).
+08 [resolvido] Controle: comandos (chave liga/desliga com confirmação e estado real pelo retorno do campo, setpoint com
+   faixa, botão), publicações por equação (período, condição, só quando muda, JSON) e controladores discretos: PID (filtro
+   da derivada, anti-windup, sem salto manual→automático, limite de taxa), liga/desliga com histerese, C(z), espaço de
+   estados (MIMO) e realimentação de estados com observador (A, B, C, D, K, L, Nr); intertravamento por equação; ganhos por
+   arquivo .m/.txt/.json, colados (MATLAB/JSON) ou por MQTT; sintonia pelo degrau no histórico (1ª ordem + tempo morto,
+   SIMC); só um controlador por tópico de saída.
+09 [resolvido] Alarmes e avisos (ISA-18.2): por limite, sem dados, conexão e por equação; lista com reconhecer, suprimir com
+   motivo e voltar; histórico, os mais frequentes e a taxa por 10 min; som e notificação opcionais; topo sempre mostrando.
+10 [resolvido] Horímetros: desligado / ligado em vazio / trabalhando pela corrente, potência ou estado (limites) ou por
+   equações; partidas, utilização, energia em vazio e custo (tarifa); zerar com registro; qualquer período pelo histórico.
+11 [resolvido] Sinótico: editor com biblioteca de pós-colheita e armazenagem (moega, balança, pré-limpeza, secador, fornalha,
+   elevador, redler, rosca, correia, silo, silo pulmão, armazém, ventilador de aeração, câmara fria, compressor, evaporador,
+   tanque, bomba, válvula, quadro, estação meteorológica, sensor, valor, texto, área, chave, setpoint e tubo), inserir símbolo
+   já cria o equipamento, mover, redimensionar, girar, duplicar, desfazer/refazer, teclado, grade; ao vivo com estado,
+   alarme piscando, nível do silo, fluxo animado nos tubos, ventilador girando e comandos; baixar SVG.
+12 [resolvido] Modelos prontos (planta inteira + sinótico + simulação): UBS de grãos (recebimento, pré-limpeza, secador com
+   PID da temperatura do ar intertravado pelo ventilador, silos com aeração, termometria, CO₂ e nível, estação e QGBT),
+   câmaras frias (liga/desliga do compressor, porta aberta, congelamento) e bancada didática térmica (PID × observador).
+13 [resolvido] Simulação sem broker: o "campo" publica nos mesmos tópicos e responde aos comandos e aos controladores
+   (equações algébricas e dinâmicas com onda() e pulso()).
+14 [resolvido] Histórico no navegador (IndexedDB, um ponto por mudança além da banda morta ou por intervalo máximo,
+   retenção configurável) e NA NUVEM DA EQUIPE (MEGA, pedido de 28/10/2026): um ZIP por planta e por dia
+   (amostras.csv, eventos.csv, variaveis.json — abre no Excel), envio automático a cada N minutos, dias fechados uma vez só e
+   o dia de hoje substituído; gráficos e relatórios buscam na nuvem o período que falta; importar arquivo de dia.
+15 [resolvido] Relatório de operação com a capa e o estilo do Gestão/QFD/Projeto Conceitual: resumo (energia, custo,
+   utilização, horas em vazio, alarmes), energia (contadores, integral da potência, energia em vazio), horímetros, estatística
+   das variáveis (média ponderada no tempo, % fora dos limites), gráficos em SVG por unidade, alarmes e comandos; prévia,
+   PDF pelo navegador, HTML com logos embutidos e CSV dos dados do período.
+16 [resolvido] Configuração salva sozinha; arquivo ZIP (configuração + sinóticos em SVG, sem senhas); duplicar e excluir
+   planta (pede o nome); configuração com versões na nuvem; tour de 5 balões.
+   QA: 22 testes automáticos ok (tests/testes.html); cliente MQTT real contra o broker de teste (senha errada recusada,
+   número com vírgula, JSON com caminho, comando chegou, Last Will publicado, reconectou após derrubar o broker);
+   3 modelos rodando juntos 25 s; todas as telas em 360/768/1024/1920 px sem estouro e sem erros no console;
+   relatório conferido com um dia sintético; editor do sinótico (inserir, mover, tubo, desfazer) e controle (colar ganhos).
