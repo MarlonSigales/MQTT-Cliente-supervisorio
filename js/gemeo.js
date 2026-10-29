@@ -1,29 +1,34 @@
 /**
  * © 2026 Supervisório MQTT — Inova Agro UFPel EMBRAPII. Código aberto; cópias permitidas desde que citadas.
  *
- * GÊMEO PELA NUVEM (MEGA) — a mesma planta em dois lugares, sem broker no segundo:
- *   ORIGINAL: está na rede da planta, é o cliente MQTT (assina, publica, controla, grava). A cada intervalo (padrão 1 min)
- *             SOBRESCREVE um arquivo "da_planta.zip" com o log do dia todo (amostras.csv, eventos.csv) e o estado.json
- *             (configuração da planta, valores atuais, horímetros, alarmes ativos e as respostas aos comandos do gêmeo).
- *             Lê "do_gemeo.json" e executa os comandos novos (com as mesmas faixas e regras da tela) dentro da validade.
- *   GÊMEO:    é um supervisório completo da mesma planta (telas, gráficos, alarmes, relatórios), mas não conecta no broker:
- *             os dados vêm do "da_planta.zip" (com atraso). Ao comandar ou reconhecer alarme, SOBRESCREVE "do_gemeo.json"
- *             com a lista de comandos pendentes; o original executa e responde no próximo "da_planta.zip".
- * Um escritor por arquivo (o original só escreve da_planta.zip, o gêmeo só escreve do_gemeo.json): não há conflito.
+ * GÊMEO PELA NUVEM (MEGA) — a mesma planta em dois lugares, sem broker no segundo.
+ *   ORIGINAL: está na rede da planta e é o cliente MQTT (assina, publica, controla, grava).
+ *   GÊMEO:    supervisório completo da mesma planta (telas, gráficos, alarmes, relatórios), sem broker; dados com atraso.
+ *
+ * Troca por arquivos que funcionam como uma "caixa de correio" com buffer (mutex):
+ *   da_planta.zip  (original → gêmeo)  só as MUDANÇAS desde a última leitura do gêmeo: amostras.csv, eventos.csv e
+ *                   estado.json (valores atuais, horímetros, alarmes, respostas aos comandos). Quem lê APAGA.
+ *                   Se o gêmeo ainda não leu, o original sobrescreve juntando o que já estava (o buffer cresce);
+ *                   se o arquivo sumiu, o gêmeo já leu e o próximo envio começa de onde o anterior parou.
+ *   do_gemeo.json  (gêmeo → original)  comandos, reconhecimentos e o pedido "receber tudo". O original lê, executa e APAGA;
+ *                   se ainda não leu, o gêmeo sobrescreve juntando os novos.
+ *   planta.json    (original → gêmeo)  configuração da planta; só é reenviado quando a configuração muda (não é apagado:
+ *                   é por ele que outro computador encontra a planta para abrir como gêmeo).
+ * "Receber tudo" (no gêmeo, e automático ao abrir como gêmeo): o original manda o dia todo de uma vez; os dias anteriores
+ * vêm do histórico normal da nuvem (um arquivo por dia). Ler duas vezes o mesmo dado não duplica (chave variável+instante).
  * Pasta: SupervisorioMQTT/Gemeo/<planta>__<id>/
- * O papel (original, gêmeo ou nenhum) é deste navegador (localStorage), não do arquivo de configuração: o mesmo projeto
- * pode ser original num computador e gêmeo em outro. Comandos de segurança (emergência, intertravamentos) nunca devem
- * depender do gêmeo: o atraso é de 1 a 2 intervalos e a decisão final é sempre do original.
+ * O papel (original, gêmeo ou nenhum) é deste navegador (localStorage), não do arquivo de configuração.
+ * Emergência e intertravamentos nunca devem depender do gêmeo: o atraso é de 1 a 2 intervalos e quem decide é o original.
  */
 
 'use strict';
 
 const GEMEO = {
     papeis: {},                 // plId → 'original' | 'gemeo'
-    est: new Map(),             // plId → { ultimoEnvio, ultimoRecebido, dadosDe, bytes, erro, ocupado, tsArquivo, tsComandos, ultimoT }
-    ARQ_PLANTA: 'da_planta.zip', ARQ_GEMEO: 'do_gemeo.json'
+    est: new Map(),             // plId → estado da troca nesta sessão
+    ARQ_PLANTA: 'da_planta.zip', ARQ_GEMEO: 'do_gemeo.json', ARQ_CONFIG: 'planta.json', DIAS_MAX: 7
 };
-const GEMEO_CHAVE = 'sup_gemeo_papel', GEMEO_PEND = 'sup_gemeo_pend_', GEMEO_EXEC = 'sup_gemeo_exec_', GEMEO_CONF = 'sup_gemeo_conf_';
+const GEMEO_CHAVE = 'sup_gemeo_papel', GEMEO_PEND = 'sup_gemeo_pend_', GEMEO_EXEC = 'sup_gemeo_exec_', GEMEO_CONF = 'sup_gemeo_conf_', GEMEO_BUF = 'sup_gemeo_buf_';
 
 function _lsLer(k, padrao) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch (e) { return padrao; } }
 function _lsGravar(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ok */ } }
@@ -39,19 +44,24 @@ function gemeoOpcoes(pl) {
     if (!['todos', 'setpoints', 'nenhum'].includes(g.politica)) g.politica = 'todos';
     return g;
 }
-function gemeoEstado(plId) { let e = GEMEO.est.get(plId); if (!e) { e = { ultimoEnvio: 0, ultimoRecebido: 0, dadosDe: 0, bytes: 0, erro: '', ocupado: false, tsArquivo: 0, tsComandos: 0, ultimoT: 0 }; GEMEO.est.set(plId, e); } return e; }
+function gemeoEstado(plId) {
+    let e = GEMEO.est.get(plId);
+    if (!e) { e = { ultimoEnvio: 0, ultimoRecebido: 0, dadosDe: 0, bytes: 0, erro: '', ocupado: false, tsCfg: 0, dia: '', bytesDia: 0, arquivosDia: 0 }; GEMEO.est.set(plId, e); }
+    return e;
+}
+function _contarBytes(e, n) { const d = diaISO(Date.now()); if (e.dia !== d) { e.dia = d; e.bytesDia = 0; e.arquivosDia = 0; } e.bytes = n; e.bytesDia += n; e.arquivosDia++; }
 function definirPapel(pl, papel) {
     if (papel) GEMEO.papeis[pl.id] = papel; else delete GEMEO.papeis[pl.id];
     _lsGravar(GEMEO_CHAVE, GEMEO.papeis);
     gemeoOpcoes(pl);
     if (papel === 'gemeo') desconectarPlanta(pl.id, true);
-    const e = gemeoEstado(pl.id); e.ultimoEnvio = 0; e.ultimoRecebido = 0; e.tsArquivo = 0; e.tsComandos = 0;
+    const e = gemeoEstado(pl.id); e.ultimoEnvio = 0; e.ultimoRecebido = 0; e.tsCfg = 0;
     logar('nuvem', papel === 'gemeo' ? 'Este navegador passou a ser o GÊMEO da planta (dados e comandos pela nuvem)' : papel === 'original' ? 'Este navegador passou a ser o ORIGINAL da planta (envia para o gêmeo pela nuvem)' : 'Gêmeo pela nuvem desligado nesta planta', pl.nome);
 }
 /** Idade dos dados no gêmeo (ms) ou null. */
 function idadeGemeo(pl) { const e = GEMEO.est.get(pl.id); return e && e.dadosDe ? Date.now() - e.dadosDe : null; }
 
-// ---------------------------------------------------------------- pastas
+// ---------------------------------------------------------------- pastas e arquivos
 async function _recarregarArvore(st) { if (st && typeof st.reload === 'function') { try { await st.reload(true); } catch (e) { /* segue com a árvore que tem */ } } }
 async function pastaGemeo(pl, criar = true) {
     const st = await nuvemGarantir(false);
@@ -63,56 +73,89 @@ async function pastaGemeo(pl, criar = true) {
     if (ja || !criar) return ja || null;
     return pasta(base, `${nomeSeguro(pl.nome)}__${pl.id}`);
 }
-const _maisNovo = (dir, nome) => filhosDe(dir).filter(f => !f.directory && f.name === nome).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))[0] || null;
+const _copias = (dir, nome) => filhosDe(dir).filter(f => !f.directory && f.name === nome).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+const _maisNovo = (dir, nome) => _copias(dir, nome)[0] || null;
+/** Lê e apaga (consome) todas as cópias de um arquivo; devolve o conteúdo da mais nova. */
+async function _consumir(dir, nome) {
+    const cs = _copias(dir, nome);
+    if (!cs.length) return null;
+    const blob = await baixar(cs[0]);
+    for (const c of cs) { try { await c.delete(true); } catch (e) { /* o outro lado já trocou: a próxima leitura traz de novo (sem duplicar) */ } }
+    return blob;
+}
+function _hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16); }
 
 // ---------------------------------------------------------------- ORIGINAL
-function _estadoOriginal(pl) {
+function _bufOriginal(pl) { return _lsLer(GEMEO_BUF + pl.id, null); }
+function _estadoOriginal(pl, desde) {
     const valores = {};
     pl.tags.forEach(t => { const x = RT.v.get(t.id); if (x) valores[t.id] = [x.v, x.t, x.q]; });
     const equip = {}; pl.equipamentos.forEach(eq => { const x = RT.equip.get(eq.id); if (x) equip[eq.id] = x; });
     const integrais = {}; pl.tags.forEach(t => { if (RT.acumIntegral.has(t.id)) integrais[t.id] = RT.acumIntegral.get(t.id); });
     const alarmes = [...ALM.ativos.values()].filter(a => a.plId === pl.id);
-    const cfg = JSON.parse(JSON.stringify(pl));
-    return { formato: 'supervisorio-gemeo-1', plantaId: pl.id, planta: pl.nome, enviadoEm: Date.now(), config: cfg, valores, equip, integrais, alarmes, confirmacoes: _lsLer(GEMEO_CONF + pl.id, []) };
+    const confirmacoes = _lsLer(GEMEO_CONF + pl.id, []).filter(c => c.t >= desde - 60000);
+    return { formato: 'supervisorio-gemeo-2', plantaId: pl.id, planta: pl.nome, desde, enviadoEm: Date.now(), valores, equip, integrais, alarmes, confirmacoes };
 }
+/** Um ciclo do original: consome os comandos, envia o buffer de mudanças e, se mudou, a configuração. */
 async function gemeoEnviarOriginal(pl) {
-    const dir = await pastaGemeo(pl, true);
-    // 1) comandos do gêmeo (antes de enviar: as respostas já vão neste envio)
-    await gemeoLerComandos(pl, dir);
-    // 2) log do dia todo + estado, sobrescrevendo o arquivo anterior
+    const dir = await pastaGemeo(pl, true), agora = Date.now();
+    let buf = _bufOriginal(pl);
+    // 1) o gêmeo já leu o envio anterior? (o arquivo sumiu) → começa de onde o anterior parou
+    if (!buf) buf = { desde: inicioDoDia(agora), ate: 0, cfg: '' };
+    else if (!_maisNovo(dir, GEMEO.ARQ_PLANTA) && buf.ate) buf.desde = buf.ate - 3000;   // 3 s de sobra: gravações atrasadas não se perdem (repetir não duplica)
+    // 2) comandos do gêmeo (antes de enviar: as respostas já vão neste envio)
+    const r = await gemeoLerComandos(pl, dir);
+    if (r.tudo) buf.desde = Math.min(buf.desde, inicioDoDia(agora));
+    buf.desde = Math.max(buf.desde, agora - GEMEO.DIAS_MAX * 86400000);
+    // 3) buffer: tudo o que aconteceu desde "desde" (sobrescreve; se o gêmeo não leu, este já inclui o anterior)
     await histDescarregar();
-    const { blob } = await zipDoDia(pl, inicioDoDia(Date.now()), { 'estado.json': JSON.stringify(_estadoOriginal(pl)) });
+    const ids = pl.tags.map(t => t.id).concat(pl.equipamentos.map(e => 'est:' + e.id));
+    const amostras = await histAmostrasDe(ids, buf.desde, agora);
+    const evs = await histEventos(buf.desde, agora, e => e.planta === pl.nome);
+    const zip = new JSZip();
+    zip.file('amostras.csv', amostras.map(([g, t, v]) => `${g};${t};${v}`).join('\n'));
+    zip.file('eventos.csv', csvDe(evs.slice().reverse().map(e => [e.t, e.tipo, e.nivel, e.texto]), ['t_ms', 'tipo', 'nível', 'texto']));
+    zip.file('estado.json', JSON.stringify(_estadoOriginal(pl, buf.desde)));
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
     await enviarSubstituindo(dir, GEMEO.ARQ_PLANTA, blob);
-    const e = gemeoEstado(pl.id); e.ultimoEnvio = Date.now(); e.bytes = blob.size; e.erro = '';
+    buf.ate = agora;
+    // 4) configuração: só quando muda (ou se alguém apagou)
+    const cfg = JSON.stringify(pl), h = _hash(cfg);
+    if (h !== buf.cfg || !_maisNovo(dir, GEMEO.ARQ_CONFIG)) {
+        await enviarSubstituindo(dir, GEMEO.ARQ_CONFIG, new Blob([JSON.stringify({ formato: 'supervisorio-gemeo-2', plantaId: pl.id, planta: pl.nome, enviadoEm: agora, config: pl })], { type: 'application/json' }));
+        buf.cfg = h;
+    }
+    _lsGravar(GEMEO_BUF + pl.id, buf);
+    const e = gemeoEstado(pl.id); e.ultimoEnvio = agora; e.erro = ''; e.desde = buf.desde; _contarBytes(e, blob.size);
     return blob.size;
 }
-/** Lê do_gemeo.json e executa os comandos ainda não executados. Devolve quantos foram tratados. */
+/** Consome do_gemeo.json e executa os comandos ainda não executados. */
 async function gemeoLerComandos(pl, dir) {
-    const e = gemeoEstado(pl.id);
-    const arq = _maisNovo(dir, GEMEO.ARQ_GEMEO);
-    if (!arq || (arq.timestamp && arq.timestamp === e.tsComandos)) return 0;
+    const res = { n: 0, tudo: false };
+    const blob = await _consumir(dir, GEMEO.ARQ_GEMEO);
+    if (!blob) return res;
     let dados;
-    try { dados = JSON.parse(await (await baixar(arq)).text()); } catch (er) { logar('nuvem', 'Arquivo de comandos do gêmeo ilegível: ' + er.message, pl.nome, 'erro'); e.tsComandos = arq.timestamp; return 0; }
-    e.tsComandos = arq.timestamp;
-    if (!dados || dados.plantaId !== pl.id || !Array.isArray(dados.comandos)) return 0;
+    try { dados = JSON.parse(await blob.text()); } catch (er) { logar('nuvem', 'Arquivo de comandos do gêmeo ilegível: ' + er.message, pl.nome, 'erro'); return res; }
+    if (!dados || dados.plantaId !== pl.id || !Array.isArray(dados.comandos)) return res;
     const exec = _lsLer(GEMEO_EXEC + pl.id, {}), conf = _lsLer(GEMEO_CONF + pl.id, []);
     const op = gemeoOpcoes(pl), agora = Date.now();
-    let n = 0;
     for (const c of dados.comandos) {
         if (!c || !c.id || exec[c.id]) continue;
-        exec[c.id] = agora; n++;
+        exec[c.id] = agora; res.n++;
         let ok = false, msg = '';
         try {
-            if (agora - num(c.t, 0) > op.validadeMin * 60000) throw new Error(`venceu (mais de ${op.validadeMin} min desde que foi dado no gêmeo)`);
-            if (op.politica === 'nenhum') throw new Error('o original não aceita comandos do gêmeo');
-            if (c.tipo === 'reconhecer') {
-                reconhecerAlarme(c.chave); msg = 'alarme reconhecido';
-            } else {
-                const cmd = pl.comandos.find(x => x.id === c.cmdId);
-                if (!cmd) throw new Error('comando não existe no original');
-                if (op.politica === 'setpoints' && cmd.tipo !== 'setpoint') throw new Error('o original só aceita setpoints do gêmeo');
-                await comandar(pl, cmd, c.valor);
-                msg = 'executado';
+            if (c.tipo === 'tudo') { res.tudo = true; msg = 'enviando o dia todo'; }
+            else {
+                if (agora - num(c.t, 0) > op.validadeMin * 60000) throw new Error(`venceu (mais de ${op.validadeMin} min desde que foi dado no gêmeo)`);
+                if (op.politica === 'nenhum') throw new Error('o original não aceita comandos do gêmeo');
+                if (c.tipo === 'reconhecer') { reconhecerAlarme(c.chave); msg = 'alarme reconhecido'; }
+                else {
+                    const cmd = pl.comandos.find(x => x.id === c.cmdId);
+                    if (!cmd) throw new Error('comando não existe no original');
+                    if (op.politica === 'setpoints' && cmd.tipo !== 'setpoint') throw new Error('o original só aceita setpoints do gêmeo');
+                    await comandar(pl, cmd, c.valor);
+                    msg = 'executado';
+                }
             }
             ok = true;
             logar('comando', `Pelo gêmeo: ${c.nome || c.tipo} — ${msg}`, pl.nome);
@@ -124,19 +167,34 @@ async function gemeoLerComandos(pl, dir) {
     }
     Object.keys(exec).forEach(k => { if (agora - exec[k] > 2 * 86400000) delete exec[k]; });
     _lsGravar(GEMEO_EXEC + pl.id, exec);
-    _lsGravar(GEMEO_CONF + pl.id, conf.filter(x => agora - x.t < 86400000).slice(-200));
-    return n;
+    _lsGravar(GEMEO_CONF + pl.id, conf.filter(x => agora - x.t < 86400000).slice(-300));
+    return res;
 }
 
-// ---------------------------------------------------------------- GÊMEO
+// ---------------------------------------------------------------- GÊMEO: comandos (fila → arquivo → entregue → confirmado)
 function pendentesGemeo(pl) { return _lsLer(GEMEO_PEND + pl.id, []); }
 function _gravarPendentes(pl, lst) { _lsGravar(GEMEO_PEND + pl.id, lst); }
-async function _enviarPendentes(pl) {
-    const dir = await pastaGemeo(pl, true);
-    const corpo = { formato: 'supervisorio-gemeo-1', plantaId: pl.id, enviadoEm: Date.now(), comandos: pendentesGemeo(pl) };
-    await enviarSubstituindo(dir, GEMEO.ARQ_GEMEO, new Blob([JSON.stringify(corpo)], { type: 'application/json' }));
+/** Se o original já consumiu o arquivo, o que estava nele foi entregue; os novos vão num arquivo novo (ou somam ao que ainda não foi lido). */
+async function _sincronizarComandos(pl, dir) {
+    const lst = pendentesGemeo(pl);
+    const ainda = !!_maisNovo(dir, GEMEO.ARQ_GEMEO);
+    if (!ainda) lst.forEach(c => { if (c.estado === 'arquivo') c.estado = 'entregue'; });
+    const enviar = lst.filter(c => c.estado === 'fila' || c.estado === 'arquivo');
+    if (enviar.some(c => c.estado === 'fila')) {
+        const corpo = { formato: 'supervisorio-gemeo-2', plantaId: pl.id, enviadoEm: Date.now(), comandos: enviar.map(c => { const x = Object.assign({}, c); delete x.estado; return x; }) };
+        await enviarSubstituindo(dir, GEMEO.ARQ_GEMEO, new Blob([JSON.stringify(corpo)], { type: 'application/json' }));
+        enviar.forEach(c => { c.estado = 'arquivo'; });
+    }
+    _gravarPendentes(pl, lst);
 }
-/** No gêmeo, comandar = pôr na fila e sobrescrever do_gemeo.json (o original executa no próximo ciclo dele). */
+async function _enfileirar(pl, c) {
+    c.estado = 'fila';
+    const lst = pendentesGemeo(pl); lst.push(c); _gravarPendentes(pl, lst);
+    if (c.tipo !== 'tudo') logar('comando', `${c.nome} → enviado ao original pela nuvem (aguardando confirmação)`, pl.nome);
+    try { await naFilaNuvem(async () => _sincronizarComandos(pl, await pastaGemeo(pl, true))); }
+    catch (er) { gemeoEstado(pl.id).erro = er.message; throw new Error('ficou na fila, mas a nuvem falhou: ' + er.message); }
+}
+/** No gêmeo, comandar = pôr na fila e gravar do_gemeo.json (o original executa no próximo ciclo dele). */
 async function gemeoComandar(pl, cmd, valor) {
     if (cmd.tipo === 'setpoint') {
         const v = num(valor);
@@ -144,8 +202,7 @@ async function gemeoComandar(pl, cmd, valor) {
         if (v < num(cmd.min, -Infinity) || v > num(cmd.max, Infinity)) throw new Error(`fora da faixa permitida (${cmd.min} a ${cmd.max})`);
         valor = v;
     }
-    const c = { id: uid('gc'), tipo: 'comando', cmdId: cmd.id, nome: cmd.nome + (cmd.tipo === 'chave' ? (valor ? ': LIGAR' : ': DESLIGAR') : cmd.tipo === 'setpoint' ? ` = ${valor}` : ''), valor, t: Date.now() };
-    await _enfileirar(pl, c);
+    await _enfileirar(pl, { id: uid('gc'), tipo: 'comando', cmdId: cmd.id, nome: cmd.nome + (cmd.tipo === 'chave' ? (valor ? ': LIGAR' : ': DESLIGAR') : cmd.tipo === 'setpoint' ? ` = ${valor}` : ''), valor, t: Date.now() });
     cmd.ultimo = { t: Date.now(), valor, pendente: true };
 }
 async function gemeoReconhecer(pl, chave) {
@@ -153,48 +210,49 @@ async function gemeoReconhecer(pl, chave) {
     await _enfileirar(pl, { id: uid('gc'), tipo: 'reconhecer', chave, nome: 'Reconhecer ' + (al ? al.texto.split(' — ')[0] : 'alarme'), t: Date.now() });
     if (al) { al.reconhecido = true; al.reconhecidoEm = Date.now(); al.pendenteGemeo = true; ALM.mudou = true; }
 }
-async function _enfileirar(pl, c) {
-    const lst = pendentesGemeo(pl); lst.push(c); _gravarPendentes(pl, lst);
-    logar('comando', `${c.nome} → enviado ao original pela nuvem (aguardando confirmação)`, pl.nome);
-    try { await naFilaNuvem(() => _enviarPendentes(pl)); }
-    catch (er) { gemeoEstado(pl.id).erro = er.message; throw new Error('ficou na fila, mas a nuvem falhou: ' + er.message); }
+/** "Receber tudo": pede ao original o dia todo e traz os dias anteriores do histórico da nuvem. */
+async function gemeoPedirTudo(pl, diasAntes = GEMEO.DIAS_MAX) {
+    await _enfileirar(pl, { id: uid('gc'), tipo: 'tudo', nome: 'Receber tudo', t: Date.now() });
+    logar('nuvem', 'Pedido ao original: receber tudo (o dia todo chega no próximo envio dele)', pl.nome);
+    let r = { amostras: 0, dias: 0 };
+    if (diasAntes > 0) { try { const hoje = inicioDoDia(Date.now()); r = await trazerHistoricoNuvem(pl, hoje - diasAntes * 86400000, hoje - 1); } catch (e) { /* sem histórico na nuvem */ } }
+    return r;
 }
 
-/** Baixa da_planta.zip (se mudou) e aplica: configuração, valores, horímetros, alarmes, log do dia e respostas. */
+// ---------------------------------------------------------------- GÊMEO: receber
+/** Um ciclo do gêmeo: configuração (se mudou), consome o buffer de mudanças e sincroniza os comandos. */
 async function gemeoReceber(pl) {
     const e = gemeoEstado(pl.id);
     const dir = await pastaGemeo(pl, false);
     if (!dir) throw new Error('o original ainda não enviou nada desta planta para a nuvem');
-    const arq = _maisNovo(dir, GEMEO.ARQ_PLANTA);
-    if (!arq) throw new Error('o original ainda não enviou nada desta planta para a nuvem');
     e.ultimoRecebido = Date.now();
-    let mudou = false;
-    if (!(arq.timestamp && arq.timestamp === e.tsArquivo)) {
-        const blob = await baixar(arq);
-        await aplicarPacoteGemeo(pl, blob);
-        e.tsArquivo = arq.timestamp; e.bytes = blob.size; mudou = true;
-    }
-    // pendentes: some quem foi respondido; reenvia a fila se mudou (ou se ficou sem resposta)
+    const cfg = _maisNovo(dir, GEMEO.ARQ_CONFIG);
+    if (cfg && cfg.timestamp !== e.tsCfg) { const b = await baixar(cfg); aplicarConfigGemeo(pl, JSON.parse(await b.text())); e.tsCfg = cfg.timestamp; }
+    const blob = await _consumir(dir, GEMEO.ARQ_PLANTA);
+    if (blob) { await aplicarPacoteGemeo(pl, blob); _contarBytes(e, blob.size); }
+    await _sincronizarComandos(pl, dir);
     e.erro = '';
-    return mudou;
+    return !!blob;
+}
+function aplicarConfigGemeo(pl, dados) {
+    if (!dados || dados.plantaId !== pl.id || !dados.config) return false;
+    if (JSON.stringify(dados.config) === JSON.stringify(pl)) return false;
+    Object.keys(pl).forEach(k => delete pl[k]); Object.assign(pl, dados.config);
+    SUP.alterado('pl');
+    return true;
 }
 async function aplicarPacoteGemeo(pl, blob) {
     const e = gemeoEstado(pl.id);
     const zip = await JSZip.loadAsync(blob);
     const est = JSON.parse(await zip.file('estado.json').async('string'));
     if (est.plantaId !== pl.id) throw new Error('o arquivo é de outra planta');
-    // 1) configuração: a do original manda (o gêmeo não edita a planta)
-    if (est.config && JSON.stringify(est.config) !== JSON.stringify(pl)) {
-        Object.keys(pl).forEach(k => delete pl[k]); Object.assign(pl, est.config);
-        SUP.alterado('pl');
-    }
-    // 2) valores atuais, horímetros e integrais
+    // 1) valores atuais, horímetros e integrais
     Object.entries(est.valores || {}).forEach(([id, [v, t, q]]) => { RT.v.set(id, { v, t, q: q || 'ok' }); RT.sujo.add(id); });
     Object.entries(est.equip || {}).forEach(([id, x]) => RT.equip.set(id, x));
     Object.entries(est.integrais || {}).forEach(([id, x]) => RT.acumIntegral.set(id, x));
-    // 3) alarmes: espelho do original (o que o gêmeo reconheceu e ainda não voltou confirmado continua reconhecido)
+    // 2) alarmes: espelho do original (o que o gêmeo reconheceu e ainda não voltou confirmado continua reconhecido)
     const novos = new Map((est.alarmes || []).map(a => [a.chave, a]));
-    [...ALM.ativos.keys()].forEach(k => { const a = ALM.ativos.get(k); if (a.plId === pl.id && !novos.has(k)) ALM.ativos.delete(k); });
+    [...ALM.ativos.keys()].forEach(k => { const a = ALM.ativos.get(k); if (a.plId === pl.id && a.alvo !== 'gemeo' && !novos.has(k)) ALM.ativos.delete(k); });
     novos.forEach((a, k) => {
         const ja = ALM.ativos.get(k);
         if (ja && ja.pendenteGemeo && !a.reconhecido) { a.reconhecido = true; a.pendenteGemeo = true; }
@@ -202,39 +260,37 @@ async function aplicarPacoteGemeo(pl, blob) {
         if (!ja && !a.reconhecido && !(a.suprimidoAte > Date.now()) && typeof anunciar === 'function') anunciar(a);
     });
     ALM.mudou = true;
-    // 4) log do dia: só o que é mais novo que o último recebido (o arquivo traz o dia todo)
-    const desde = e.ultimoT || 0;
+    // 3) mudanças do histórico e do log (ler de novo o mesmo ponto não duplica)
     if (zip.file('amostras.csv')) {
-        const linhas = lerCsv(await zip.file('amostras.csv').async('string')).slice(1).filter(l => l.length >= 5 && +l[1] > desde - 120000);
-        const amostras = linhas.map(l => ({ g: l[2], t: +l[1], v: num(l[4]) })).filter(a => Number.isFinite(a.v));
+        const amostras = (await zip.file('amostras.csv').async('string')).split('\n').map(l => l.split(';')).filter(l => l.length === 3)
+            .map(([g, t, v]) => ({ g, t: +t, v: +v })).filter(a => Number.isFinite(a.v) && Number.isFinite(a.t));
         await histImportar(amostras);
-        amostras.forEach(a => {
+        amostras.sort((a, b) => a.t - b.t).forEach(a => {
             let m = HIST.memoria.get(a.g); if (!m) { m = []; HIST.memoria.set(a.g, m); }
             if (!m.length || a.t > m[m.length - 1][0]) m.push([a.t, a.v]);
             if (m.length > MEMORIA_PONTOS) m.splice(0, m.length - MEMORIA_PONTOS);
         });
     }
     if (zip.file('eventos.csv')) {
-        const evs = lerCsv(await zip.file('eventos.csv').async('string')).slice(1).filter(l => l.length >= 5 && +l[1] > desde - 120000)
-            .map(l => ({ t: +l[1], tipo: l[2], nivel: l[3], texto: l[4], planta: pl.nome }));
-        if (evs.length) {
-            const n = await histImportarEventos(evs);
-            if (n) { const vistos = new Set(RT.log.map(x => x.t + '|' + x.texto)); evs.filter(x => !vistos.has(x.t + '|' + x.texto)).forEach(x => RT.log.push(x)); RT.log.sort((a, b) => a.t - b.t); if (RT.log.length > LOG_MAX) RT.log.splice(0, RT.log.length - LOG_MAX); }
+        const evs = lerCsv(await zip.file('eventos.csv').async('string')).slice(1).filter(l => l.length >= 4)
+            .map(l => ({ t: +l[0], tipo: l[1], nivel: l[2], texto: l[3], planta: pl.nome })).filter(x => Number.isFinite(x.t));
+        if (evs.length && await histImportarEventos(evs)) {
+            const vistos = new Set(RT.log.map(x => x.t + '|' + x.texto));
+            evs.filter(x => !vistos.has(x.t + '|' + x.texto)).forEach(x => RT.log.push(x));
+            RT.log.sort((a, b) => a.t - b.t); if (RT.log.length > LOG_MAX) RT.log.splice(0, RT.log.length - LOG_MAX);
         }
     }
-    e.ultimoT = Math.max(desde, num(est.enviadoEm, 0));
     e.dadosDe = num(est.enviadoEm, Date.now());
-    // 5) respostas aos comandos
+    // 4) respostas aos comandos
     const conf = new Map((est.confirmacoes || []).map(c => [c.id, c]));
-    const pend = pendentesGemeo(pl), resta = [];
-    const op = gemeoOpcoes(pl);
+    const pend = pendentesGemeo(pl), resta = [], op = gemeoOpcoes(pl);
     for (const c of pend) {
         const r = conf.get(c.id);
-        if (r) logar('comando', `${c.nome}: ${r.ok ? 'confirmado pelo original' : 'recusado pelo original — ' + r.msg}`, pl.nome, r.ok ? 'info' : 'erro');
+        if (r) { if (c.tipo !== 'tudo') logar('comando', `${c.nome}: ${r.ok ? 'confirmado pelo original' : 'recusado pelo original — ' + r.msg}`, pl.nome, r.ok ? 'info' : 'erro'); }
         else if (Date.now() - c.t > (op.validadeMin * 60 + 3 * op.intervaloS) * 1000) logar('comando', `${c.nome}: sem resposta do original (venceu)`, pl.nome, 'erro');
         else resta.push(c);
     }
-    if (resta.length !== pend.length) { _gravarPendentes(pl, resta); naFilaNuvem(() => _enviarPendentes(pl)).catch(() => {}); }
+    if (resta.length !== pend.length) _gravarPendentes(pl, resta);
     agendarTela(true);
     return est;
 }
@@ -277,19 +333,19 @@ async function listarGemeosNuvem() {
     const raiz = filhosDe(st.root).find(d => d.directory && d.name === NUVEM.pastaRaiz);
     const base = raiz && filhosDe(raiz).find(d => d.directory && d.name === 'Gemeo');
     return filhosDe(base).filter(d => d.directory && d.name.includes('__')).map(d => {
-        const arq = _maisNovo(d, GEMEO.ARQ_PLANTA);
-        return { dir: d, nome: d.name.split('__')[0].replace(/_/g, ' '), id: d.name.split('__').pop(), arq, quando: arq ? quandoArquivo(arq) : null, bytes: arq && arq.size };
-    }).filter(x => x.arq);
+        const cfg = _maisNovo(d, GEMEO.ARQ_CONFIG);
+        return { dir: d, nome: d.name.split('__')[0].replace(/_/g, ' '), id: d.name.split('__').pop(), cfg, quando: cfg ? quandoArquivo(cfg) : null };
+    }).filter(x => x.cfg);
 }
-/** Abre (ou atualiza) neste navegador a planta da nuvem e torna este navegador o gêmeo dela. */
+/** Abre (ou atualiza) neste navegador a planta da nuvem, torna este navegador o gêmeo dela e pede tudo ao original. */
 async function abrirComoGemeo(item) {
-    const blob = await baixar(item.arq);
-    const zip = await JSZip.loadAsync(blob);
-    const est = JSON.parse(await zip.file('estado.json').async('string'));
-    let pl = SUP.planta(est.plantaId);
-    if (!pl) { pl = JSON.parse(JSON.stringify(est.config)); SUP.p.plantas.push(pl); SUP.alterado('pl'); }
+    const dados = JSON.parse(await (await baixar(item.cfg)).text());
+    let pl = SUP.planta(dados.plantaId);
+    if (!pl) { pl = JSON.parse(JSON.stringify(dados.config)); SUP.p.plantas.push(pl); SUP.alterado('pl'); }
+    else aplicarConfigGemeo(pl, dados);
     definirPapel(pl, 'gemeo');
-    await aplicarPacoteGemeo(pl, blob);
-    const e = gemeoEstado(pl.id); e.tsArquivo = item.arq.timestamp; e.ultimoRecebido = Date.now(); e.bytes = blob.size;
+    gemeoEstado(pl.id).tsCfg = item.cfg.timestamp;
+    await gemeoPedirTudo(pl);
+    await naFilaNuvem(() => gemeoReceber(pl)).catch(() => {});
     return pl;
 }

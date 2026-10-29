@@ -175,5 +175,10 @@ Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referên
    nenhum), e confirma no envio seguinte. O papel (original/gêmeo) é de cada navegador; a configuração vem do original.
    QA: 28 testes ok (arquivo sobrescrito, espelho de valor/alarme/configuração, faixa no gêmeo, execução única, confirmação,
    comando vencido recusado); tela Nuvem em 1400 e 380 px sem erros.
+45b [resolvido] Gêmeo com buffer que o leitor apaga (pedido de 29/10/2026 00:20): da_planta.zip leva só as mudanças desde a
+   última leitura; o gêmeo lê e apaga; se não leu, o original junta as mudanças no mesmo arquivo (com 3 s de sobra; repetir
+   não duplica). do_gemeo.json igual no sentido contrário. Configuração em planta.json, só quando muda. "Receber tudo"
+   (e ao abrir como gêmeo): o original manda o dia todo e os dias anteriores vêm do histórico da nuvem. Tela mostra
+   arquivos e bytes do dia. QA: teste de ida e volta refeito (buffer junta, leitor apaga, só mudanças, receber tudo).
 46 [futuro] Original como serviço (Node) para não depender de uma aba aberta; estimativa de cota por planta na tela.
 

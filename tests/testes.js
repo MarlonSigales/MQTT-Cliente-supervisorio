@@ -286,54 +286,71 @@ teste('Nuvem (MEGA simulado): envia os dias e traz de volta o período', async (
     igual(new Set(arquivos.map(a => a.name)).size, arquivos.length, 'um arquivo por dia');
     nuvemSair(); NUVEM.simulado = null;
 });
-teste('Gêmeo pela nuvem: original sobrescreve o arquivo, gêmeo espelha, comando vai e volta confirmado', async () => {
+teste('Gêmeo pela nuvem: buffer que o leitor apaga (só mudanças), receber tudo, comando vai e volta confirmado', async () => {
     NUVEM.simulado = megaSimulado(); NUVEM.storage = null; NUVEM.email = '';
     await nuvemEntrar('equipe@exemplo.org', 'x');
     const pl = plantaEmBranco('Gêmeo teste'); SUP.p.plantas.push(pl); prepararPlanta(pl);
-    const tg = criarTag({ nome: 'Temperatura', tipo: 'temperatura', topico: 'tt' }); tg.limites = Object.assign(tg.limites, { ativo: true, h: 30, atrasoS: 0 }); pl.tags.push(tg);
+    const tg = criarTag({ nome: 'Temperatura', tipo: 'temperatura', topico: 'tt' }); tg.limites = Object.assign(tg.limites, { ativo: true, h: 30, atrasoS: 0 }); tg.registro = { minS: 0, maxS: 60, banda: 0 }; pl.tags.push(tg);
     const sp = criarComando({ nome: 'SP temperatura', tipo: 'setpoint', topico: 'sp', min: 0, max: 100 }); pl.comandos.push(sp);
     pl.gemeo = { intervaloS: 3600, validadeMin: 5, politica: 'todos' };
+    [GEMEO_PEND, GEMEO_EXEC, GEMEO_CONF, GEMEO_BUF].forEach(k => localStorage.removeItem(k + pl.id));
     const papel = p => { definirPapel(pl, p); const e = gemeoEstado(pl.id); e.ultimoEnvio = e.ultimoRecebido = Date.now(); };
     const dir = () => NUVEM.storage.root.children.find(x => x.name === 'SupervisorioMQTT').children.find(x => x.name === 'Gemeo').children.find(d => d.name.endsWith('__' + pl.id));
-    // original: valor + alarme ativo, envia duas vezes (sobrescreve: um arquivo só)
+    const qtos = n => dir().children.filter(f => f.name === n).length;
+    const linhasZip = async () => { const f = dir().children.find(x => x.name === 'da_planta.zip'); const z = await JSZip.loadAsync(await f.downloadBuffer()); return (await z.file('amostras.csv').async('string')).split('\n').filter(Boolean).length; };
+    const t0 = Date.now() - 60000;
+    // original: 1º envio, depois outro sem o gêmeo ler → o mesmo arquivo junta tudo (buffer)
     papel('original');
-    definirValor(pl, tg, 35.5, Date.now());
-    ok([...ALM.ativos.values()].some(a => a.alvo === tg.id), 'alarme no original');
-    await gemeoEnviarOriginal(pl); const b = await gemeoEnviarOriginal(pl);
-    ok(b > 0, 'enviou'); igual(dir().children.filter(f => f.name === 'da_planta.zip').length, 1, 'arquivo sobrescrito');
-    // gêmeo: sem MQTT, recebe valor, alarme e log
+    definirValor(pl, tg, 35.5, t0);
+    await gemeoEnviarOriginal(pl);
+    definirValor(pl, tg, 36, t0 + 1000);
+    await gemeoEnviarOriginal(pl);
+    igual(qtos('da_planta.zip'), 1, 'um arquivo só'); igual(qtos('planta.json'), 1, 'configuração enviada');
+    igual(await linhasZip(), 2, 'buffer juntou os dois pontos');
+    // gêmeo lê e apaga
     papel('gemeo'); RT.v.delete(tg.id); [...ALM.ativos.keys()].forEach(k => ALM.ativos.delete(k));
     pl.tags[0].nome = 'mexido no gêmeo';
-    await gemeoReceber(pl);
-    igual(valorTag(tg.id), 35.5, 'valor espelhado'); igual(pl.tags[0].nome, 'Temperatura', 'configuração vem do original');
+    ok(await gemeoReceber(pl), 'recebeu');
+    igual(qtos('da_planta.zip'), 0, 'leitor apagou');
+    igual(valorTag(tg.id), 36, 'valor espelhado'); igual(pl.tags[0].nome, 'Temperatura', 'configuração vem do original');
     ok([...ALM.ativos.values()].some(a => a.alvo === tg.id), 'alarme espelhado');
-    // comando no gêmeo: faixa conferida, vai para a fila e para do_gemeo.json
+    igual((await histPontos(tg.id, t0 - 1, t0 + 2000)).length, 2, 'histórico no gêmeo');
+    ok(!(await gemeoReceber(pl)), 'nada novo enquanto o original não manda');
+    // original: depois que o gêmeo leu, só as mudanças
+    papel('original');
+    definirValor(pl, tg, 37, Date.now());
+    await gemeoEnviarOriginal(pl);
+    igual(await linhasZip(), 1, 'só a mudança');
+    // comando no gêmeo
+    papel('gemeo'); await gemeoReceber(pl);
     let erro = ''; try { await comandar(pl, pl.comandos[0], 150); } catch (e) { erro = e.message; } ok(/faixa/.test(erro), 'faixa conferida no gêmeo');
     await comandar(pl, pl.comandos[0], 42);
-    igual(pendentesGemeo(pl).length, 1, 'na fila'); igual(dir().children.filter(f => f.name === 'do_gemeo.json').length, 1, 'arquivo de comandos');
     const chave = [...ALM.ativos.values()].find(a => a.alvo === tg.id).chave;
-    await gemeoReconhecer(pl, chave); igual(pendentesGemeo(pl).length, 2, 'reconhecer também vai');
-    // original executa uma vez só e responde
+    await gemeoReconhecer(pl, chave);
+    igual(qtos('do_gemeo.json'), 1, 'um arquivo de comandos'); igual(pendentesGemeo(pl).length, 2, 'na fila');
+    await gemeoPedirTudo(pl, 0);
+    // original consome, executa uma vez e manda o dia todo
     const pub = window.publicar, publicados = [];
     window.publicar = async (p, topico, payload) => { publicados.push([topico, payload]); };
     try {
         papel('original');
         await gemeoEnviarOriginal(pl);
+        igual(qtos('do_gemeo.json'), 0, 'original apagou os comandos');
         igual(publicados.map(x => x[1]), ['42'], 'setpoint publicado pelo original');
         ok(ALM.ativos.get(chave).reconhecido, 'alarme reconhecido no original');
-        gemeoEstado(pl.id).tsComandos = 0; await gemeoEnviarOriginal(pl);
-        igual(publicados.length, 1, 'não executa duas vezes');
+        igual(await linhasZip(), 3, 'receber tudo: o dia todo');
     } finally { window.publicar = pub; }
-    // gêmeo recebe a confirmação e esvazia a fila
     papel('gemeo'); await gemeoReceber(pl);
     igual(pendentesGemeo(pl).length, 0, 'fila esvaziada pelas confirmações');
     // comando vencido é recusado
-    localStorage.setItem(GEMEO_PEND + pl.id, JSON.stringify([{ id: 'velho1', tipo: 'comando', cmdId: sp.id, nome: 'velho', valor: 10, t: Date.now() - 3600000 }]));
-    await naFilaNuvem(() => _enviarPendentes(pl));
+    _gravarPendentes(pl, [{ id: 'velho1', tipo: 'comando', cmdId: sp.id, nome: 'velho', valor: 10, t: Date.now() - 3600000, estado: 'fila' }]);
+    await _sincronizarComandos(pl, dir());
     papel('original'); await gemeoEnviarOriginal(pl);
     const conf = JSON.parse(localStorage.getItem(GEMEO_CONF + pl.id)).find(c => c.id === 'velho1');
     ok(conf && !conf.ok && /venceu/.test(conf.msg), 'vencido recusado');
-    definirPapel(pl, ''); [GEMEO_PEND, GEMEO_EXEC, GEMEO_CONF].forEach(k => localStorage.removeItem(k + pl.id));
+    // abrir como gêmeo a partir da lista
+    const lst = await listarGemeosNuvem(); ok(lst.some(x => x.id === pl.id), 'planta listada pela configuração');
+    definirPapel(pl, ''); [GEMEO_PEND, GEMEO_EXEC, GEMEO_CONF, GEMEO_BUF].forEach(k => localStorage.removeItem(k + pl.id));
     SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
     nuvemSair(); NUVEM.simulado = null;
 });
