@@ -209,4 +209,7 @@ Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referên
    abas, excluir); planta virtual em Node contra broker local: 216 tópicos no status, comando desliga e religa a linha,
    setpoint muda a vazão; no navegador com broker real local: 183/183 variáveis com valor, janela de status com filtro.
    Não testado contra o broker.emqx.io daqui (rede do ambiente de testes bloqueia), só contra o broker local.
+53 [resolvido] Excluir planta direto da Visão geral (botão em cada cartão). Antes: só em Configurar, pedindo para digitar o
+   nome exato (difícil com "—") e, na Visão geral, a tela não atualizava depois. Agora: confirmação simples com o que vai
+   ser apagado; para a simulação, desliga o gêmeo e limpa os alarmes da planta. QA: excluir pela Visão geral, recarregar.
 

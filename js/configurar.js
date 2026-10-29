@@ -241,11 +241,15 @@ Object.assign(ACOES, {
     },
     'cfg-excluir': async b => {
         const pl = SUP.planta(b.dataset.pl);
-        const r = await confirmar(`Excluir "${pl.nome}"?`, 'Some a configuração desta planta neste navegador. Para confirmar, digite o nome da planta.', { botao: 'Excluir', perigo: true, campo: { rotulo: 'Nome da planta', valor: '' } });
-        if (r == null) return;
-        if (r.trim() !== pl.nome) throw new Error('o nome digitado não confere; nada foi excluído');
+        if (!pl) return;
+        if (!(await confirmar(`Excluir "${esc(pl.nome)}"?`, `Apaga a planta deste navegador: ${pl.equipamentos.length} elemento(s), ${pl.tags.length} variável(is), ${pl.comandos.length} comando(s) e o sinótico. O histórico já gravado e o que está na nuvem continuam.`, { botao: 'Excluir planta', perigo: true }))) return;
         desconectarPlanta(pl.id, true);
-        SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl); SUP.alterado('pl'); location.hash = '#/inicio';
+        if (typeof pararSimulacao === 'function') pararSimulacao(pl.id);
+        if (typeof definirPapel === 'function' && gemeoPapel(pl)) definirPapel(pl, '');
+        [...ALM.ativos.keys()].forEach(k => { if (ALM.ativos.get(k).plId === pl.id) ALM.ativos.delete(k); });
+        SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl); SUP.alterado('pl'); SUP.gravar();
+        if (location.hash === '#/inicio' || location.hash === '' || location.hash === '#/') renderPagina(true); else location.hash = '#/inicio';
+        avisar(`"${pl.nome}" excluída.`);
     }
 });
 

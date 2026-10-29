@@ -156,7 +156,7 @@ function cartaoPlanta(pl) {
     return `<section class="card cartao-planta" style="--cor:${escAttr(pl.cor)}">
         <div class="card-topo"><h2><a href="#/planta/${pl.id}">${esc(pl.nome)}</a></h2>${chipConexao(pl)}</div>
         <div data-resumo="${pl.id}">${resumoPlanta(pl)}</div>
-        <div class="botoes">${botaoConexao(pl)}<a class="btn btn-secondary btn-sm" href="#/planta/${pl.id}">${icone('planta')} Painel</a><a class="btn btn-secondary btn-sm" href="#/sinotico/${pl.id}">${icone('sinotico')} Sinótico</a></div>
+        <div class="botoes">${botaoConexao(pl)}<a class="btn btn-secondary btn-sm" href="#/planta/${pl.id}">${icone('planta')} Painel</a><a class="btn btn-secondary btn-sm" href="#/sinotico/${pl.id}">${icone('sinotico')} Sinótico</a><button type="button" class="btn btn-danger btn-sm" data-acao="cfg-excluir" data-pl="${pl.id}" title="Excluir esta planta">${icone('lixo')} Excluir</button></div>
     </section>`;
 }
 function htmlListaAlarmesCurta(arr) {

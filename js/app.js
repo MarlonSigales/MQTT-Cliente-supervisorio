@@ -8,7 +8,7 @@
 
 'use strict';
 
-const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029e' };
+const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029f' };
 const PAGINAS = {};        // nome → { titulo, render(param) → html, montar?(raiz, param), atualizar?(sujos, forcar) }
 const ACOES = {};          // data-acao → função(botão, evento)
 
