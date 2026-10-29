@@ -220,6 +220,12 @@ function estadoComando(pl, cm) {
 }
 
 // ---------------------------------------------------------------- editor
+/** Aba da paleta: elementos (processo), acionamentos (o que liga/desliga/posiciona) ou sensores. */
+function abaSimbolo(k, S) {
+    if (S.sensor || S.instrumento || /^Sensores$|instrumentos/i.test(S.grupo || '')) return 'sensores';
+    if (['Elétrica e automação', 'Comandos e botões', 'Comandos'].includes(S.grupo) || /^(motor|inversor|soft|partida|contator|v_solenoide|v_motorizada|v_pneumatica|v_controle|damper_motorizado|atuador|comporta_onoff|comporta_proporcional|guilhotina_pneumatica)/.test(k)) return 'acionamentos';
+    return 'elementos';
+}
 const SinEd = { pl: null, editando: false, sel: null, desfazer: [], refazer: [], modoTubo: null, zoom: 1 };
 
 function sinGuardarDesfazer() {
@@ -360,6 +366,14 @@ function cliqueTubulacao(svg, e, p, g) {
         const el = { id: uid('el'), s: 'tubo', de: m.de, para: { el: alvo.el.id, p: alvo.porta.id }, meio: m.meio, tipo: m.tipo, estilo: TIPOS_PORTA[m.tipo].estilo, seta: true, eq: '' };
         // a animação do fluxo acompanha o equipamento de onde sai a linha
         const origem = pl.sinotico.elementos.find(x => x.id === m.de.el); if (origem && origem.eq) el.eq = origem.eq;
+        const So = origem && SIMBOLOS[origem.s];
+        if (So && So.sensor && !So.equip && alvo.el.eq && m.tipo === 'sinal') {
+            const eqA = SUP.equipamento(alvo.el.eq);
+            pl.sinotico.elementos = pl.sinotico.elementos.filter(x => !(x.s === 'tubo' && x.de && x.de.el === origem.id));
+            prenderSensor(pl, origem, eqA); el.eq = eqA.id;
+            const tg = SUP.tag(origem.tag);
+            setTimeout(() => avisar(`Sensor preso a "${eqA.nome}": tópico ${tg ? topicoCompleto(pl, tg.topico) : ''}`, 'ok', 6000), 50);
+        }
         pl.sinotico.elementos.push(el);
         SinEd.modoTubo = null; SinEd.sel = el.id; document.body.classList.remove('sin-desenhando');
         SUP.alterado('sinotico'); sinRedesenhar(); atualizarBarraSinotico();
@@ -433,6 +447,7 @@ async function sinAdicionar(s, eqAlvo = null) {
     // símbolo de equipamento, sensor ou botão já cria equipamento, variáveis e comandos com tópico base e unidade
     const criados = aplicarKitSimbolo(pl, el, S);
     pl.sinotico.elementos.push(el); SinEd.sel = el.id;
+    if (S.sensor && !S.equip && el.eq) ligarSensorAoElemento(pl, el, el.eq);
     SUP.alterado('sinotico'); sinRedesenhar();
     if (criados) avisar(`${criados} já com tópico pré-preenchido. Clique no símbolo para editar os tópicos.`, 'ok', 5000);
 }
@@ -453,6 +468,38 @@ function escolherElemento(pl, oQue) {
         f.onsubmit = e => { e.preventDefault(); fim(f.eq.value); };
     });
 }
+/** Exclui um equipamento inteiro: variáveis, comandos, horímetro, desenho e linhas ligadas. */
+function excluirEquipamento(pl, eqId) {
+    const tags = new Set(pl.tags.filter(t => t.equipId === eqId).map(t => t.id));
+    pl.tags = pl.tags.filter(t => !tags.has(t.id));
+    pl.comandos = pl.comandos.filter(c => c.equipId !== eqId);
+    pl.equipamentos = pl.equipamentos.filter(e => e.id !== eqId);
+    pl.sinotico.elementos = pl.sinotico.elementos.filter(x => x.eq !== eqId || x.s === 'tubo');
+    pl.sinotico.elementos.forEach(x => { if (x.tags) x.tags = x.tags.filter(id => !tags.has(id)); if (tags.has(x.tag)) x.tag = ''; });
+    pl.controladores.forEach(c => { c.entradas = lista(c.entradas).filter(id => !tags.has(id)); c.saidas.forEach(s => { if (tags.has(s.tagId)) s.tagId = ''; }); });
+    limparLigacoes(pl);
+    return tags.size;
+}
+/** Excluir no desenho: se o elemento é o único desenho de um equipamento (ou é um sensor), pergunta se apaga as variáveis junto. */
+async function sinExcluirComPergunta(el) {
+    const pl = SinEd.pl, S = SIMBOLOS[el.s] || {};
+    const eq = el.eq && el.s !== 'tubo' && S.equip && SUP.equipamento(el.eq);
+    const unico = eq && pl.sinotico.elementos.filter(x => x.eq === eq.id && x.s !== 'tubo' && SIMBOLOS[x.s] && SIMBOLOS[x.s].equip).length === 1;
+    const sensorTag = S.sensor && !S.equip && el.tag && SUP.tag(el.tag);
+    if (unico) {
+        const nT = pl.tags.filter(t => t.equipId === eq.id).length, nC = pl.comandos.filter(c => c.equipId === eq.id).length;
+        const tudo = await confirmar(`Excluir "${esc(eq.nome)}"?`, `Apaga o elemento, as ${nT} variável(is), os ${nC} comando(s), os sensores presos a ele e as linhas ligadas. O histórico já gravado continua.`, { botao: 'Excluir tudo', perigo: true });
+        if (!tudo) return;
+        sinGuardarDesfazer();
+        excluirEquipamento(pl, eq.id);
+    } else {
+        sinGuardarDesfazer();
+        pl.sinotico.elementos = pl.sinotico.elementos.filter(x => x !== el);
+        if (sensorTag) pl.tags = pl.tags.filter(t => t !== sensorTag);
+        limparLigacoes(pl);
+    }
+    SinEd.sel = null; SUP.alterado('pl'); sinRedesenhar(); atualizarBarraSinotico();
+}
 function sinAcao(acao) {
     const pl = SinEd.pl, el = pl.sinotico.elementos.find(x => x.id === SinEd.sel);
     if (acao === 'desfazer') return sinDesfazer();
@@ -462,6 +509,7 @@ function sinAcao(acao) {
     if (acao === 'zoom-') { SinEd.zoom = Math.max(0.25, SinEd.zoom / 1.25); return sinRedesenhar(); }
     if (acao === 'zoom-ajustar') { const palco = document.getElementById('sin-palco'); SinEd.zoom = Math.max(0.25, Math.min(2, (palco.clientWidth - 4) / pl.sinotico.largura)); return sinRedesenhar(); }
     if (!el) return;
+    if (acao === 'excluir') { sinExcluirComPergunta(el); return; }
     sinGuardarDesfazer();
     if (acao === 'excluir') { pl.sinotico.elementos = pl.sinotico.elementos.filter(x => x !== el); SinEd.sel = null; limparLigacoes(pl); }
     if (acao === 'caminho-auto' && el.s === 'tubo') el.meio = [];
@@ -518,7 +566,7 @@ function sinMudarPropriedade(campo, valor) {
     if (campo === 'w' || campo === 'h') el[campo] = Math.max(10, num(valor, 50));
     else if (campo === 'n') { el.n = Math.max(2, Math.min(16, num(valor, 2) | 0)); ajustarSaidasComando(pl, el); const r = limparLigacoes(pl); if (r) avisar(`${r} ligação(ões) removida(s): a saída não existe mais.`, 'erro', 5000); }
     else if (campo === 'seta') el.seta = !!valor;
-    else if (campo === 'eqSensor') { const eq = pl.equipamentos.find(x => x.id === valor); if (eq) prenderSensor(pl, el, eq); }
+    else if (campo === 'eqSensor') { const eq = pl.equipamentos.find(x => x.id === valor); if (eq) { prenderSensor(pl, el, eq); ligarSensorAoElemento(pl, el, eq.id); } }
     else if (campo === 'rotulo') { const antigo = el.rotulo; el.rotulo = valor; renomearPeloRotulo(pl, el, antigo, valor); }
     else el[campo] = valor;
     if (campo === 'eq' && valor && SIMBOLOS[el.s].equip && !lista(el.tags).length) el.tags = pl.tags.filter(t => t.equipId === valor).slice(0, 3).map(t => t.id);
@@ -610,6 +658,17 @@ function prenderSensor(pl, el, eq) {
     t.kitS = grandezaUnica(pl, eq.id, baseTopico(S.nomeTag || TIPOS_VAR[S.sensor].nome));
     t.nome = `${S.nomeTag || TIPOS_VAR[S.sensor].nome} — ${eq.nome}`;
     if (t.topicoAuto !== false) { t.topicoAuto = true; t.topico = `${topicoBaseEquip(pl, eq)}/${t.kitS}`; }
+}
+/** Desenha a linha de sinal do sensor até o ponto dos sensores do elemento (troca a ligação antiga, se houver). */
+function ligarSensorAoElemento(pl, sensorEl, eqId) {
+    pl.sinotico.elementos = pl.sinotico.elementos.filter(x => !(x.s === 'tubo' && x.de && x.de.el === sensorEl.id));
+    const alvo = pl.sinotico.elementos.find(x => x.eq === eqId && temPontoSensores(x.s));
+    const ps = alvo && portasDoElemento(alvo).find(p => p.tipo === 'sinal' && p.io === 'e');
+    const so = portasDoElemento(sensorEl).find(p => p.tipo === 'sinal' && p.io === 's');
+    if (!ps || !so) return null;
+    const t = { id: uid('el'), s: 'tubo', de: { el: sensorEl.id, p: so.id }, para: { el: alvo.id, p: ps.id }, meio: [], tipo: 'sinal', estilo: TIPOS_PORTA.sinal.estilo, seta: false, eq: eqId };
+    pl.sinotico.elementos.push(t);
+    return t;
 }
 function baseTopico(nome) { return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'equipamento'; }
 

@@ -95,8 +95,19 @@ function portasDoElemento(el) {
     }
     // motores ganham a entrada elétrica (se o símbolo ainda não tem)
     if (S.kit && S.kit.motor && !out.some(p => p.tipo === 'eletrico')) add('eletrico', 'e', .92, 0, 't');
+    // todo elemento tem o ponto dos sensores (entrada de sinal "sens"); vários sensores podem chegar nele
+    if (temPontoSensores(el.s) && !out.some(p => p.tipo === 'sinal' && p.io === 'e')) {
+        const livre = (x, y) => out.every(p => Math.hypot(p.x - x, p.y - y) > 16);
+        let pos = null;
+        for (let f = .97; f > .02 && !pos; f -= .08) if (livre(f * w, 0)) pos = [f, 0, 't'];
+        for (let f = .1; f < .95 && !pos; f += .1) if (livre(w, f * h)) pos = [1, f, 'r'];
+        pos = pos || [.5, 0, 't'];
+        out.push({ id: 'sens', tipo: 'sinal', io: 'e', x: pos[0] * w, y: pos[1] * h, dir: pos[2], sensores: true });
+    }
     return out;
 }
+/** Elementos (equipamentos) recebem sensores; sensores, botões e indicadores não. */
+function temPontoSensores(s) { const S = SIMBOLOS[s]; return !!(S && S.equip && !S.sensor && !S.instrumento && !S.comando && !S.entrada); }
 const VET_DIR = { t: [0, -1], b: [0, 1], l: [-1, 0], r: [1, 0] };
 function girar(px, py, cx, cy, graus) {
     if (!graus) return [px, py];
@@ -134,7 +145,7 @@ function formaPorta(tipo, cheia) {
 function svgPortas(el) {
     return `<g class="portas">${portasDoElemento(el).map(p => {
         const ang = { t: 0, b: 0, l: 90, r: 90 }[p.dir];
-        return `<g class="porta p-${p.tipo} porta-${p.io}" data-porta="${p.id}" data-tipo="${p.tipo}" data-io="${p.io}" transform="translate(${r1(p.x)} ${r1(p.y)})${p.tipo === 'ar' && ang ? ` rotate(${ang})` : ''}"><title>${p.io === 's' ? 'Saída' : 'Entrada'}: ${esc(TIPOS_PORTA[p.tipo].nome)}</title><circle class="porta-alvo" r="11"/>${formaPorta(p.tipo, p.io === 's')}</g>`;
+        return `<g class="porta p-${p.tipo} porta-${p.io}" data-porta="${p.id}"${p.sensores ? ' data-sensores="1"' : ''} data-tipo="${p.tipo}" data-io="${p.io}" transform="translate(${r1(p.x)} ${r1(p.y)})${p.tipo === 'ar' && ang ? ` rotate(${ang})` : ''}"><title>${p.sensores ? 'Ponto dos sensores: ligue aqui a saída de sinal dos sensores deste elemento (L)' : `${p.io === 's' ? 'Saída' : 'Entrada'}: ${esc(TIPOS_PORTA[p.tipo].nome)}`}</title><circle class="porta-alvo" r="11"/>${formaPorta(p.tipo, p.io === 's')}</g>`;
     }).join('')}</g>`;
 }
 function htmlLegendaPortas() {

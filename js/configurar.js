@@ -59,7 +59,10 @@ PAGINAS.configurar = {
                     <label>Keepalive (s) <input type="number" min="5" max="600" data-ref="pl:${pl.id}.conexao.keepalive" value="${c.keepalive}"></label>
                     <label>Início do identificador <input type="text" data-ref="pl:${pl.id}.conexao.clientId" value="${escAttr(c.clientId)}" placeholder="supervisorio"><small>Um final aleatório é acrescentado (duas abas não se derrubam).</small></label>
                     <label class="campo-inline largo"><input type="checkbox" data-ref="pl:${pl.id}.conexao.lwt"${c.lwt ? ' checked' : ''}> Avisar o campo quando o supervisório cair (Last Will em <code>${esc((c.prefixo ? c.prefixo.replace(/\/+$/, '') + '/' : '') + 'supervisorio/status')}</code> = offline)</label>
-                </div><p class="nota">Mudou a conexão? Clique em Desconectar e Conectar de novo.</p></section>
+                    ${pl.simulacao && c.tipo === 'mqtt' ? `<label class="campo-inline largo"><input type="checkbox" data-ref="pl:${pl.id}.conexao.campoVirtual"${c.campoVirtual ? ' checked' : ''}> Rodar a <b>planta virtual</b> neste navegador: ao conectar, um segundo cliente publica no broker como se fosse o campo (sensores, retornos e resposta de status)</label>` : ''}
+                </div><p class="nota">Mudou a conexão? Clique em Desconectar e Conectar de novo.</p>
+                <div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="pedir-status" data-pl="${pl.id}">${icone('zoom')} Pedir status (todos os tópicos)</button><button type="button" class="btn btn-danger btn-sm" data-acao="limpar-conexao" data-pl="${pl.id}">${icone('lixo')} Apagar conexão</button></div>
+                <p class="nota">Publica em <code>${esc(topicoCompleto(pl, 'status/get'))}</code> e mostra o que o campo responder em <code>${esc(topicoCompleto(pl, 'status'))}</code>.</p></section>
 
             <section class="card" id="areas"><div class="card-topo"><h2>Áreas</h2><button type="button" class="btn btn-secondary btn-sm" data-acao="cfg-area-add" data-pl="${pl.id}">${icone('mais')} Área</button></div>
                 <ul class="lista-editavel">${pl.areas.map(a => `<li><input type="text" data-ref="area:${a.id}.nome" value="${escAttr(a.nome)}" aria-label="Nome da área"><button type="button" class="btn-icone" data-acao="cfg-area-del" data-pl="${pl.id}" data-id="${a.id}" title="Excluir">${icone('lixo')}</button></li>`).join('') || '<li class="nota">Sem áreas.</li>'}</ul></section>
@@ -278,6 +281,27 @@ PAGINAS.nuvem = {
                 <div class="botoes"><button type="button" class="btn btn-danger btn-sm" data-acao="hist-apagar">${icone('lixo')} Apagar o histórico deste navegador</button></div></section></div>`;
     }
 };
+/** Janela com a lista de tópicos que o campo respondeu ao pedido de status. */
+function mostrarStatus(pl, d) {
+    const conf = new Set(pl.tags.map(t => topicoCompleto(pl, t.topico)).concat(pl.comandos.map(c => topicoCompleto(pl, c.topico))));
+    const ts = lista(d.topicos);
+    const fundo = document.createElement('div');
+    fundo.className = 'janela-fundo';
+    fundo.innerHTML = `<div class="janela janela-larga" role="dialog" aria-label="Status do campo"><h2>${icone('zoom')} Status: ${ts.length} tópicos</h2>
+        <p class="nota">${esc(d.planta || pl.nome)} · resposta de ${esc(d.geradoEm ? new Date(d.geradoEm).toLocaleString('pt-BR') : '—')}. <b>publica</b> = o campo manda; <b>assina</b> = o campo recebe (comandos).</p>
+        <input type="search" class="status-busca" placeholder="Filtrar tópico ou nome" aria-label="Filtrar">
+        <div class="tabela-rolar"><table class="tabela status-tabela"><thead><tr><th>Tópico</th><th>Sentido</th><th>Nome</th><th>Unid.</th><th>Último valor</th><th>Aqui</th></tr></thead><tbody>
+        ${ts.map(x => `<tr data-busca="${escAttr((x.topico + ' ' + (x.nome || '')).toLowerCase())}"><td><code>${esc(x.topico)}</code></td><td>${esc(x.sentido || '')}</td><td>${esc(x.nome || '')}${x.elemento ? `<small> · ${esc(x.elemento)}</small>` : ''}</td><td>${esc(x.unidade || '')}</td><td>${esc(x.valor != null ? String(x.valor).slice(0, 40) : '')}</td><td>${conf.has(x.topico) ? '✓' : /^status/.test(x.tipo || '') ? '' : '<span class="falta" title="Não está configurado neste supervisório">—</span>'}</td></tr>`).join('')}</tbody></table></div>
+        <div class="janela-rodape"><button type="button" class="btn btn-secondary" data-s="copiar">Copiar JSON</button><button type="button" class="btn btn-primary" data-s="fechar">Fechar</button></div></div>`;
+    document.body.appendChild(fundo);
+    const fechar = () => fundo.remove();
+    fundo.addEventListener('click', e => {
+        if (e.target === fundo || e.target.closest('[data-s=fechar]')) fechar();
+        if (e.target.closest('[data-s=copiar]')) { try { navigator.clipboard.writeText(JSON.stringify(d, null, 1)); avisar('JSON copiado.'); } catch (er) { avisar('Não consegui copiar.', 'erro'); } }
+    });
+    fundo.querySelector('.status-busca').addEventListener('input', e => { const q = e.target.value.trim().toLowerCase(); fundo.querySelectorAll('tbody tr').forEach(tr => { tr.hidden = q && !tr.dataset.busca.includes(q); }); });
+    fundo.querySelector('[data-s=fechar]').focus();
+}
 function htmlGemeo() {
     const kb = b => b ? (b < 1048576 ? (b / 1024).toFixed(0) + ' kB' : (b / 1048576).toFixed(1) + ' MB') : '—';
     const linhas = SUP.p.plantas.map(pl => {
@@ -302,6 +326,24 @@ function htmlGemeo() {
         <div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="gemeo-listar">Ver plantas enviadas por originais</button></div><div id="gemeo-lista"></div></section>`;
 }
 Object.assign(ACOES, {
+    'excluir-eq': async b => {
+        const pl = SUP.planta(b.dataset.pl), eq = SUP.equipamento(b.dataset.eq);
+        if (!eq || !(await confirmar(`Excluir "${esc(eq.nome)}"?`, 'Apaga o elemento, as variáveis, os comandos, os sensores presos a ele, o desenho e as linhas ligadas. O histórico já gravado continua.', { botao: 'Excluir', perigo: true }))) return;
+        const n = excluirEquipamento(pl, eq.id); SUP.alterado('pl'); renderPagina(true); avisar(`"${eq.nome}" excluído (${n} variável(is)).`);
+    },
+    'limpar-conexao': async b => {
+        const pl = SUP.planta(b.dataset.pl);
+        if (!(await confirmar('Apagar a conexão?', 'Desconecta e apaga o endereço do broker, o usuário, a senha guardada neste navegador e o prefixo. As variáveis e os tópicos continuam.', { botao: 'Apagar conexão', perigo: true }))) return;
+        desconectarPlanta(pl.id, true);
+        Object.assign(pl.conexao, { url: '', usuario: '', prefixo: '', campoVirtual: false, tipo: 'mqtt' }); Senhas.guardar(pl.id, '');
+        SUP.alterado('pl'); renderPagina(true); avisar('Conexão apagada.');
+    },
+    'pedir-status': async b => {
+        const pl = SUP.planta(b.dataset.pl);
+        if (estadoConexao(pl.id) !== 'conectado') throw new Error('conecte a planta antes de pedir o status');
+        avisar('Pedindo status ao campo…', 'ok', 6000);
+        mostrarStatus(pl, await pedirStatus(pl));
+    },
     'gemeo-papel': async b => {
         const pl = SUP.planta(b.dataset.pl), papel = b.dataset.papel;
         if (papel === 'gemeo' && !(await confirmar('Tornar este navegador o gêmeo?', `"${esc(pl.nome)}" deixa de conectar no broker aqui; valores, alarmes e configuração passam a vir do original pela nuvem, e os comandos vão para o original executar.`, { botao: 'Ser gêmeo' }))) return;

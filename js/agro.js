@@ -167,3 +167,95 @@ const SIMBOLOS_PO = {
 Object.assign(SIMBOLOS, SIMBOLOS_PO);
 // equipamentos passivos de pó também são elementos (para receber sensores: área/elemento/sensor)
 ['ciclone', 'ciclone_casca', 'camara_decantacao', 'coifa_captacao'].forEach(k => { if (SIMBOLOS[k]) SIMBOLOS[k].equip = true; });
+
+// ===== transportadores: sensor de velocidade (rotação do pé / tambor movido) e escorregamento (pedido de 29/10/2026)
+// Escorregamento = quanto a correia/corrente gira menos que o acionamento (%); acima de ~5 % indica correia patinando,
+// embuchamento ou corrente frouxa — é o que o "speed switch" do pé do elevador vigia (atrito e risco de incêndio/explosão).
+(() => {
+    const ESC = { s: 'escorregamento', tipo: 'percentual', nome: 'Escorregamento', un: '%', faixa: [0, 20], dec: 1, lim: { h: 5, hh: 10, atrasoS: 5, histerese: 0.5, prioridadeExtremos: 1 } };
+    const VEL = {
+        elevador: { s: 'rotacao', tipo: 'rotacao', nome: 'Rotação do pé (sensor de velocidade)' },
+        correia: { s: 'velocidade', tipo: 'velocidade', nome: 'Velocidade da correia', un: 'm/s', faixa: [0, 5] },
+        transportador: { s: 'rotacao', tipo: 'rotacao', nome: 'Rotação do eixo movido (sensor de velocidade)' },
+        rosca: { s: 'rotacao', tipo: 'rotacao', nome: 'Rotação da rosca (sensor de velocidade)' },
+        balanca_fita: { s: 'velocidade', tipo: 'velocidade', nome: 'Velocidade da fita', un: 'm/s', faixa: [0, 3] }
+    };
+    for (const [k, vel] of Object.entries(VEL)) {
+        const S = SIMBOLOS[k];
+        if (!S || !S.kit) continue;
+        S.kit = Object.assign({}, S.kit, { tags: (S.kit.tags || []).slice() });
+        if (!S.kit.tags.some(t => t.s === vel.s)) S.kit.tags.push(vel);
+        if (!S.kit.tags.some(t => t.s === 'escorregamento')) S.kit.tags.push(ESC);
+    }
+    Object.assign(SIMBOLOS, {
+        sensor_rotacao: { nome: 'Sensor de rotação / velocidade (speed switch)', grupo: 'Sensores', w: 40, h: 40, sensor: 'rotacao', sigla: 'SE', nomeTag: 'Rotação' },
+        sensor_escorregamento: { nome: 'Sensor de escorregamento (correia / corrente)', grupo: 'Sensores', w: 40, h: 40, sensor: 'percentual', sigla: 'SSH', nomeTag: 'Escorregamento', un: '%', lim: { h: 5, hh: 10, atrasoS: 5, histerese: 0.5, prioridadeExtremos: 1 } },
+        sensor_temp_mancal: { nome: 'Temperatura de mancal', grupo: 'Sensores', w: 40, h: 40, sensor: 'temperatura', sigla: 'TT', nomeTag: 'Temperatura do mancal', lim: { h: 70, hh: 85, atrasoS: 30, histerese: 2 } },
+        sensor_vibracao: { nome: 'Sensor de vibração', grupo: 'Sensores', w: 40, h: 40, sensor: 'aceleracao', sigla: 'VT', nomeTag: 'Vibração' }
+    });
+})();
+
+// ===== sensores de cada elemento (pedido de 29/10/2026: "silos de temperatura, CO₂, metano e demais, e assim por diante")
+// Cada elemento já nasce com os sensores que costuma ter no campo; o tópico é área/elemento/grandeza. Os limites são
+// ponto de partida (conferir com o responsável técnico):
+//  - metano: 10 % do LIE (5 % vol = 50.000 ppm) → 5.000 ppm atenção, 20 % do LIE → 10.000 ppm alarme;
+//  - fosfina (fumigação): limite de exposição 0,3 ppm (8 h) e 1 ppm (curta duração) — não entrar acima disso;
+//  - O₂ abaixo de 19,5 % = espaço confinado deficiente de oxigênio (NR-33);
+//  - UR intergranular acima de ~75 % favorece fungos; CO₂ como no kit original.
+(() => {
+    const T = {
+        temp_min: { s: 'temp_min', tipo: 'temperatura', nome: 'Temperatura do grão (mín.)', faixa: [10, 40] },
+        temp_espaco: { s: 'temp_espaco', tipo: 'temperatura', nome: 'Temperatura do espaço livre', faixa: [0, 50] },
+        ur_inter: { s: 'ur_intergranular', tipo: 'umidade', nome: 'UR do ar intergranular', lim: { h: 75, atrasoS: 1800, histerese: 2 } },
+        ug: { s: 'umidade_grao', tipo: 'umidade_grao', nome: 'Umidade do grão (cabos de umidade)', lim: { h: 14, atrasoS: 1800, histerese: 0.2 } },
+        metano: { s: 'metano', tipo: 'generico', nome: 'Metano (CH₄)', un: 'ppm', dec: 0, faixa: [0, 20000], lim: { h: 5000, hh: 10000, atrasoS: 60, histerese: 200, prioridadeExtremos: 1 } },
+        fosfina: { s: 'fosfina', tipo: 'generico', nome: 'Fosfina (PH₃)', un: 'ppm', dec: 2, faixa: [0, 5], lim: { h: 0.3, hh: 1, atrasoS: 30, histerese: 0.05, prioridadeExtremos: 1 } },
+        o2: { s: 'o2', tipo: 'generico', nome: 'Oxigênio (O₂)', un: '%', dec: 1, faixa: [15, 22], lim: { l: 19.5, ll: 18, atrasoS: 30, histerese: 0.2, prioridadeExtremos: 1 } },
+        nivel: { s: 'nivel', tipo: 'nivel', nome: 'Nível', lim: { h: 95, atrasoS: 30, histerese: 1 } },
+        nivel_alto: { s: 'nivel_alto', tipo: 'estado', nome: 'Nível alto (chave)', lim: { h: 0.5, atrasoS: 2, prioridadeAvisos: 2 } },
+        nivel_baixo: { s: 'nivel_baixo', tipo: 'estado', nome: 'Nível baixo (chave)' },
+        presenca: { s: 'presenca_grao', tipo: 'estado', nome: 'Presença de grão' },
+        entupimento: { s: 'entupimento', tipo: 'estado', nome: 'Entupimento / embuchamento', lim: { h: 0.5, atrasoS: 2, prioridadeAvisos: 1 } },
+        mancal: { s: 'temp_mancal', tipo: 'temperatura', nome: 'Temperatura do mancal', faixa: [0, 120], lim: { h: 70, hh: 85, atrasoS: 30, histerese: 2 } },
+        vibracao: { s: 'vibracao', tipo: 'aceleracao', nome: 'Vibração', un: 'mm/s', faixa: [0, 20], lim: { h: 7.1, hh: 11, atrasoS: 30, histerese: 0.3 } },
+        dp: { s: 'dp', tipo: 'pressao', nome: 'Perda de carga', un: 'Pa', dec: 0, faixa: [0, 2500], lim: { h: 1500, atrasoS: 60, histerese: 50 } },
+        t_exaust: { s: 't_exaustao', tipo: 'temperatura', nome: 'Temperatura do ar de exaustão', faixa: [10, 80] },
+        ur_exaust: { s: 'ur_exaustao', tipo: 'umidade', nome: 'UR do ar de exaustão' },
+        ug_ent: { s: 'ug_entrada', tipo: 'umidade_grao', nome: 'Umidade do grão na entrada' },
+        faisca: { s: 'faisca', tipo: 'estado', nome: 'Faísca detectada', lim: { h: 0.5, atrasoS: 0, prioridadeAvisos: 1 } },
+        depressao: { s: 'depressao', tipo: 'pressao', nome: 'Pressão na câmara (depressão)', un: 'Pa', dec: 0, faixa: [-200, 50] },
+        o2_fumos: { s: 'o2_fumos', tipo: 'generico', nome: 'O₂ nos gases', un: '%', dec: 1, faixa: [0, 21] }
+    };
+    const EXTRA = {
+        silo: ['temp_min', 'temp_espaco', 'ur_inter', 'ug', 'metano', 'fosfina', 'o2', 'nivel_alto'],
+        armazem: ['temp_min', 'temp_espaco', 'ur_inter', 'ug', 'metano', 'fosfina', 'o2', 'nivel'],
+        silo_pulmao: ['nivel_alto', 'nivel_baixo'],
+        moega: ['presenca'],
+        secador: ['ug_ent', 't_exaust', 'ur_exaust', 'faisca'],
+        fornalha: ['depressao', 'o2_fumos'],
+        elevador: ['entupimento', 'mancal'],
+        correia: ['entupimento', 'mancal'],
+        transportador: ['entupimento'],
+        rosca: ['entupimento'],
+        ventilador: ['vibracao', 'mancal'], ventilador_centrifugo: ['vibracao', 'mancal'], exaustor_axial: ['vibracao'], aspirador_casca: ['vibracao'],
+        descascador: ['vibracao'], brunidor: ['vibracao', 'mancal'], polidor: ['vibracao', 'mancal'],
+        prelimpeza: ['entupimento'], maquina_limpeza: ['entupimento'],
+        ciclone: ['dp'], ciclone_casca: ['dp'], multiciclone: ['entupimento']
+    };
+    for (const [k, extras] of Object.entries(EXTRA)) {
+        const S = SIMBOLOS[k];
+        if (!S) continue;
+        const kit = S.kit ? Object.assign({}, S.kit, { tags: (S.kit.tags || []).slice() }) : { tags: [], mostrar: [] };
+        extras.forEach(x => { const t = T[x]; if (t && !kit.tags.some(y => y.s === t.s)) kit.tags.push(t); });
+        if (!kit.mostrar || !kit.mostrar.length) kit.mostrar = kit.tags.slice(0, 1).map(t => t.s);
+        if (k === 'armazem' && !kit.nivel) kit.nivel = 'nivel';
+        S.kit = kit;
+    }
+    Object.assign(SIMBOLOS, {
+        sensor_metano: { nome: 'Sensor de metano (CH₄)', grupo: 'Sensores', w: 40, h: 40, sensor: 'generico', sigla: 'AT', nomeTag: 'Metano', un: 'ppm', lim: T.metano.lim },
+        sensor_fosfina: { nome: 'Sensor de fosfina (PH₃, fumigação)', grupo: 'Sensores', w: 40, h: 40, sensor: 'generico', sigla: 'AT', nomeTag: 'Fosfina', un: 'ppm', lim: T.fosfina.lim },
+        sensor_o2: { nome: 'Sensor de oxigênio (O₂, espaço confinado)', grupo: 'Sensores', w: 40, h: 40, sensor: 'generico', sigla: 'AT', nomeTag: 'Oxigênio', un: '%', lim: T.o2.lim },
+        cabo_termometria: { nome: 'Cabo de termometria (pêndulo)', grupo: 'Sensores', w: 40, h: 40, sensor: 'temperatura', sigla: 'TT', nomeTag: 'Temperatura do cabo' },
+        cabo_umidade: { nome: 'Cabo de umidade do grão', grupo: 'Sensores', w: 40, h: 40, sensor: 'umidade_grao', sigla: 'MT', nomeTag: 'Umidade do grão (cabo)' }
+    });
+})();

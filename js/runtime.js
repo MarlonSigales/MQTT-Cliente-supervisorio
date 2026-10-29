@@ -29,6 +29,7 @@ const RT = {
     monitor: [],              // últimas mensagens MQTT (tela Logs → Monitor)
     descobertos: new Map(),   // plId → Map(tópico → { n, ultimo, t })
     descobrindo: new Map(),   // plId → filtro assinado para descobrir
+    status: new Map(),        // plId → pedido de status em andamento
     log: [],                  // eventos recentes (memória)
     sujo: new Set(),          // variáveis que mudaram desde o último desenho da tela
     ouvintes: new Set(),
@@ -101,6 +102,8 @@ function lerPayload(bytes, caminho) {
 
 function receber(pl, topico, bytes, info) {
     const t = Date.now();
+    const esp = RT.status.get(pl.id);
+    if (esp && topico === esp.topico) { try { esp.resolver(JSON.parse(_dec.decode(bytes))); } catch (e) { esp.rejeitar(new Error('a resposta de status não é JSON')); } }
     const txt = bytes.length > 300 ? _dec.decode(bytes.subarray(0, 300)) + '…' : _dec.decode(bytes);
     RT.monitor.push({ t, pl: pl.nome, plId: pl.id, dir: 'rx', topico, txt, qos: info.qos, retain: info.retain });
     if (RT.monitor.length > MONITOR_MAX) RT.monitor.splice(0, RT.monitor.length - MONITOR_MAX);
@@ -146,6 +149,7 @@ function conectarPlanta(pl) {
             if (c.lwt) cliente.publicar((prefixo ? prefixo + '/' : '') + 'supervisorio/status', 'online', { qos: 1, retain: true }).catch(() => {});
             assinarTopicos(pl);
             if (c.tipo === 'simulado' && typeof iniciarSimulacao === 'function') iniciarSimulacao(pl);
+            if (c.tipo === 'mqtt' && c.campoVirtual && pl.simulacao && typeof iniciarSimulacao === 'function' && !SIM.has(pl.id)) iniciarSimulacao(pl, true);
         } else if (estado === 'erro' && anterior !== 'erro') {
             logar('conexao', `Falha na conexão: ${detalhe}`, pl.nome, 'erro');
             decidirAlarme(pl, { chave: chaveAlarme(pl.id, 'conexao', 'CON'), alvo: 'conexao', tipo: 'CON', prioridade: 2, texto: `Sem conexão com o broker — ${detalhe}` }, true, false, 10, Date.now());
@@ -178,6 +182,7 @@ function assinarTopicos(pl) {
     pl.comandos.filter(c => c.tagEstado === '' && c.topico).forEach(() => {});
     const desc = RT.descobrindo.get(pl.id);
     if (desc) quero.set(desc, 0);
+    if (RT.status.has(pl.id)) quero.set(RT.status.get(pl.id).topico, 0);
     for (const f of [...r.cliente.assinaturas.keys()]) if (!quero.has(f)) r.cliente.cancelar(f).catch(() => {});
     for (const [f, q] of quero) if (!r.cliente.assinaturas.has(f) || r.cliente.assinaturas.get(f) !== q) r.cliente.assinar(f, q).catch(e => logar('conexao', `Assinatura de "${f}" recusada: ${e.message}`, pl.nome, 'erro'));
 }
@@ -200,6 +205,22 @@ async function publicar(pl, topico, payload, o = {}, motivo = '') {
     RT.monitor.push({ t: Date.now(), pl: pl.nome, plId: pl.id, dir: 'tx', topico, txt, qos: o.qos || 0, retain: !!o.retain });
     if (RT.monitor.length > MONITOR_MAX) RT.monitor.splice(0, RT.monitor.length - MONITOR_MAX);
     if (motivo) logar(o.tipoLog || 'comando', `${motivo} → ${topico} = ${txt}`, pl.nome, 'info', null, o.persistir !== false);
+}
+
+/** Pede ao campo a lista de todos os tópicos: publica em <prefixo>/status/get e espera <prefixo>/status. */
+async function pedirStatus(pl, esperaS = 6) {
+    const r = RT.con.get(pl.id);
+    if (!r || r.estado !== 'conectado') throw new Error(`a planta "${pl.nome}" está sem conexão`);
+    const topico = topicoCompleto(pl, 'status');
+    const p = new Promise((resolver, rejeitar) => {
+        const tm = setTimeout(() => rejeitar(new Error(`ninguém respondeu em ${topico} (${esperaS} s). O campo (CLP, gateway ou planta virtual) precisa responder a ${topicoCompleto(pl, 'status/get')}.`)), esperaS * 1000);
+        RT.status.set(pl.id, { topico, resolver: v => { clearTimeout(tm); resolver(v); }, rejeitar: e => { clearTimeout(tm); rejeitar(e); } });
+    });
+    try {
+        await r.cliente.assinar(topico, 0);
+        await publicar(pl, topicoCompleto(pl, 'status/get'), JSON.stringify({ de: 'supervisorio', t: new Date().toISOString() }), { qos: 0 }, 'Pedido de status');
+        return await p;
+    } finally { RT.status.delete(pl.id); r.cliente.cancelar(topico).catch(() => {}); }
 }
 
 /** Comando da tela (chave, setpoint ou botão). */

@@ -8,7 +8,7 @@
 
 'use strict';
 
-const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029d' };
+const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029e' };
 const PAGINAS = {};        // nome → { titulo, render(param) → html, montar?(raiz, param), atualizar?(sujos, forcar) }
 const ACOES = {};          // data-acao → função(botão, evento)
 
@@ -318,13 +318,16 @@ Object.assign(ACOES, {
     'usar-modelo': async b => {
         const M = MODELOS_PRONTOS[b.dataset.modelo];
         const pl = M.montar();
+        if (b.dataset.modo === 'simulado') pl.conexao.tipo = 'simulado';
         garantirVariaveis(pl);
         SUP.p.plantas.push(pl);
         if (SUP.p.plantas.length === 1 && SUP.p.nome === 'Supervisório') SUP.p.nome = pl.nome;
         SUP.alterado('tudo-local'); SUP.p.plantas.forEach(prepararPlanta);
         conectarPlanta(pl);
         location.hash = '#/planta/' + pl.id;
-        avisar(`"${pl.nome}" criada em modo de simulação (sem broker). Troque para o broker real em Configurar → Conexão.`, 'ok', 8000);
+        avisar(pl.conexao.tipo === 'mqtt' && pl.conexao.campoVirtual
+            ? `"${pl.nome}" conectando em ${pl.conexao.url}; a planta virtual publica em ${pl.conexao.prefixo}/… Configurar → Conexão → "Pedir status" lista todos os tópicos.`
+            : `"${pl.nome}" criada em modo de simulação (sem broker). Troque para o broker real em Configurar → Conexão.`, 'ok', 10000);
         mostrarTour(true);
     },
     'planta-branco': async () => {

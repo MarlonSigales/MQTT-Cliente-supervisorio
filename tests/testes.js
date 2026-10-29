@@ -354,6 +354,60 @@ teste('Gêmeo pela nuvem: buffer que o leitor apaga (só mudanças), receber tud
     SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
     nuvemSair(); NUVEM.simulado = null;
 });
+teste('UBG de arroz (exemplo): kits por elemento, linhas tipadas, planta virtual com todos os tópicos e status', async () => {
+    const pl = MODELOS_PRONTOS.ubg_arroz.montar('t/ubg'); pl.conexao.tipo = 'simulado'; garantirVariaveis(pl);
+    ok(pl.equipamentos.length >= 40 && pl.tags.length >= 200, `${pl.equipamentos.length} elementos, ${pl.tags.length} variáveis`);
+    // tópicos área/elemento/grandeza e únicos
+    const tops = pl.tags.filter(t => t.origem === 'mqtt').map(t => t.topico);
+    igual(new Set(tops).size, tops.length, 'tópicos únicos');
+    ok(tops.every(t => t.split('/').length === 3), 'todos área/elemento/grandeza');
+    ok(tops.includes('armazenagem/silo_1/metano') && tops.includes('engenho/elevador_do_despedregador/escorregamento') && tops.includes('engenho/elevador_do_despedregador/rotacao'), 'silo com metano; elevador com escorregamento e rotação');
+    // toda linha liga saída → entrada do mesmo tipo
+    pl.sinotico.elementos.filter(e => e.s === 'tubo').forEach(t => { const a = acharPorta(pl, t.de), b = acharPorta(pl, t.para); ok(a && b && a.io === 's' && b.io === 'e' && a.tipo === b.tipo && a.tipo === t.tipo, 'ligação ' + t.id); });
+    // a planta virtual cobre todos os tópicos medidos e todos os comandos
+    const pub = new Set(pl.simulacao.modelos.flatMap(m => [m.topico, m.estado].filter(Boolean)));
+    igual(tops.filter(t => !pub.has(t)), [], 'todo sensor tem modelo');
+    const ass = new Set(pl.simulacao.modelos.flatMap(m => [m.cmd, m.tipo === 'entrada' ? m.topico : null].filter(Boolean)));
+    igual(pl.comandos.map(c => c.topico).filter(t => !ass.has(t)), [], 'todo comando tem quem obedeça');
+    pl.simulacao.modelos.forEach(m => { if (m.expr) compilar(m.expr); if (m.deriv) compilar(m.deriv); });
+    // roda no broker local: valores chegam, status lista tudo, comando para a linha
+    SUP.p.plantas.push(pl); prepararPlanta(pl); conectarPlanta(pl);
+    await new Promise(r => setTimeout(r, 100));
+    for (let i = 0; i < 6; i++) { cicloSimulacao(1); ciclo(); await new Promise(r => setTimeout(r, 20)); }
+    await new Promise(r => setTimeout(r, 200));
+    const sem = pl.tags.filter(t => t.origem === 'mqtt' && valorTag(t.id) == null).map(t => t.topico);
+    igual(sem, [], 'todas as variáveis com valor');
+    const st = await pedirStatus(pl, 2);
+    ok(st.total >= tops.length + pl.comandos.length && st.topicos.some(x => x.topico === 't/ubg/engenho/descascador/cmd' && x.sentido === 'assina'), 'status com tudo: ' + st.total);
+    const vaz = pl.tags.find(t => t.topico === 'engenho/balanca_de_fluxo/vazao');
+    ok(valorTag(vaz.id) > 7, 'engenho produzindo');
+    await comandar(pl, pl.comandos.find(c => c.topico === 'engenho/descascador/cmd'), 0);
+    for (let i = 0; i < 3; i++) { await new Promise(r => setTimeout(r, 20)); cicloSimulacao(1); ciclo(); }
+    await new Promise(r => setTimeout(r, 200));
+    igual(valorTag(vaz.id), 0, 'descascador parado para a linha (intertravamento)');
+    const rend = pl.tags.find(t => t.variavel === 'rendimento_inteiros');
+    ok(rend, 'rendimento calculado');
+    desconectarPlanta(pl.id, true); SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
+});
+teste('Sensores: todo elemento tem o ponto dos sensores; ligar o sensor nele prende o sensor; abas da paleta', () => {
+    const semPonto = Object.keys(SIMBOLOS).filter(k => temPontoSensores(k) && !portasDoElemento({ s: k, x: 0, y: 0, n: SIMBOLOS[k].n }).some(p => p.tipo === 'sinal' && p.io === 'e'));
+    igual(semPonto, [], 'todos com ponto dos sensores');
+    const projeto = SUP.p;
+    const pl = plantaEmBranco('Pontos'); SUP.p = criarProjetoVazio(); SUP.p.plantas.push(pl);
+    const Se = SIMBOLOS.elevador, el = { id: uid('el'), s: 'elevador', x: 0, y: 0, w: Se.w, h: Se.h, rotulo: 'Elevador', tags: [] };
+    aplicarKitSimbolo(pl, el, Se); pl.sinotico.elementos.push(el);
+    const Ss = SIMBOLOS.sensor_temp_mancal, se = { id: uid('el'), s: 'sensor_temp_mancal', x: 100, y: 0, w: Ss.w, h: Ss.h, tags: [], _eqAlvo: el.eq };
+    aplicarKitSimbolo(pl, se, Ss); pl.sinotico.elementos.push(se);
+    const t = ligarSensorAoElemento(pl, se, el.eq);
+    ok(t && t.para.p === 'sens' && t.tipo === 'sinal', 'linha de sinal até o ponto dos sensores');
+    igual(SUP.tag(se.tag).topico, 'area_1/elevador_1/temperatura_do_mancal', 'tópico área/elemento/sensor');
+    igual(abaSimbolo('inversor', SIMBOLOS.inversor), 'acionamentos'); igual(abaSimbolo('motor', SIMBOLOS.motor), 'acionamentos');
+    igual(abaSimbolo('sensor_metano', SIMBOLOS.sensor_metano), 'sensores'); igual(abaSimbolo('silo', SIMBOLOS.silo), 'elementos');
+    // excluir o elemento apaga variáveis, comandos, sensor e linhas
+    const n = excluirEquipamento(pl, el.eq);
+    ok(n > 5 && !pl.tags.some(x => x.equipId === el.eq) && !pl.sinotico.elementos.some(x => x.s === 'tubo'), 'excluído por inteiro');
+    SUP.p = projeto;
+});
 teste('Relatório: monta com os dados e escapa nomes', async () => {
     const pl = SUP.p.plantas[0];
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const t0 = d0.getTime() - 86400000;

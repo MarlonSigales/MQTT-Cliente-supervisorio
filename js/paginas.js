@@ -127,8 +127,13 @@ PAGINAS.inicio = {
 function htmlComecar(compacto = false) {
     return `<section class="${compacto ? '' : 'card'} comecar">
         ${compacto ? '' : '<h2>Comece por um modelo pronto</h2><p class="nota">Os modelos já trazem áreas, equipamentos, variáveis com tópicos, alarmes, horímetros, equações, controle, sinótico e uma simulação para testar sem broker. Depois é só apontar para o seu broker e trocar os tópicos.</p>'}
+        <div class="exemplo-destaque">
+            <div><span class="selo">Exemplo</span><h3>${esc(MODELOS_PRONTOS.ubg_arroz.nome.replace(/ \(.*\)$/, ''))}</h3><p>${esc(MODELOS_PRONTOS.ubg_arroz.resumo)}</p>
+                <p class="nota">No broker público, cada exemplo ganha um prefixo próprio (ex.: <code>inovaagro/ubg_arroz/a1b2</code>); qualquer cliente MQTT pode ver e comandar publicando em <code>…/status/get</code> para listar todos os tópicos.</p></div>
+            <div class="botoes"><button type="button" class="btn btn-primary" data-acao="usar-modelo" data-modelo="ubg_arroz">${icone('conectar')} Abrir no broker.emqx.io</button>
+                <button type="button" class="btn btn-secondary" data-acao="usar-modelo" data-modelo="ubg_arroz" data-modo="simulado">Abrir sem internet (simulação)</button></div></div>
         <div class="comecar-opcoes">
-            ${Object.entries(MODELOS_PRONTOS).map(([k, M]) => `<button type="button" class="opcao" data-acao="usar-modelo" data-modelo="${k}"><b>${esc(M.nome)}</b><span>${esc(M.resumo)}</span></button>`).join('')}
+            ${Object.entries(MODELOS_PRONTOS).filter(([k]) => k !== 'ubg_arroz').map(([k, M]) => `<button type="button" class="opcao" data-acao="usar-modelo" data-modelo="${k}"><b>${esc(M.nome)}</b><span>${esc(M.resumo)}</span></button>`).join('')}
             <button type="button" class="opcao" data-acao="planta-branco"><b>${icone('mais')} Planta em branco</b><span>Conecte no seu broker e use "Descobrir tópicos": o sistema lista o que chega e cria as variáveis com um clique (tipo e ícone adivinhados pelo nome).</span></button>
             <button type="button" class="opcao" data-acao="abrir-arquivo"><b>📂 Abrir arquivo</b><span>Configuração baixada antes (.zip ou .json).</span></button>
             <a class="opcao" href="#/nuvem"><b>${icone('nuvem')} Abrir da nuvem da equipe</b><span>Configurações e dados passados guardados no MEGA da equipe.</span></a>
@@ -179,7 +184,7 @@ PAGINAS.planta = {
                 const cmds = pl.comandos.filter(c => c.equipId === eq.id);
                 if (!tags.length && !cmds.length && filtro) return '';
                 return `<div class="bloco-equip">
-                    <div class="bloco-equip-topo"><h3>${esc(eq.nome)} <button type="button" class="btn-icone" data-acao="renomear-eq" data-eq="${eq.id}" title="Renomear">${icone('editar')}</button></h3>${chipEstadoEquip(eq)}${eq.horimetro.ativo ? `<small class="hor" data-hor="${eq.id}"></small>` : ''}
+                    <div class="bloco-equip-topo"><h3>${esc(eq.nome)} <button type="button" class="btn-icone" data-acao="renomear-eq" data-eq="${eq.id}" title="Renomear">${icone('editar')}</button><button type="button" class="btn-icone" data-acao="excluir-eq" data-pl="${pl.id}" data-eq="${eq.id}" title="Excluir este elemento (variáveis, comandos e desenho)">${icone('lixo')}</button></h3>${chipEstadoEquip(eq)}${eq.horimetro.ativo ? `<small class="hor" data-hor="${eq.id}"></small>` : ''}
                         <div class="cmds">${cmds.map(c => botaoComando(pl, c)).join('')}</div></div>
                     <div class="grade-vars">${tags.map(t => cartaoVar(pl, t)).join('') || '<p class="nota">Sem variáveis.</p>'}</div></div>`;
             }).join('') + (soltas.length ? `<div class="bloco-equip"><div class="grade-vars">${soltas.map(t => cartaoVar(pl, t)).join('')}</div></div>` : '');
@@ -188,7 +193,7 @@ PAGINAS.planta = {
         const cmdsSoltos = pl.comandos.filter(c => !c.equipId);
         return `<div class="container">${cabecalho(esc(pl.nome), pl.descricao ? esc(pl.descricao) : `Prefixo dos tópicos: <code>${esc(pl.conexao.prefixo || '(nenhum)')}</code>`, `${chipConexao(pl)} ${botaoConexao(pl)}`)}
             <div class="barra-filtro"><input type="search" placeholder="Filtrar variáveis por nome ou tópico" value="${escAttr(App.filtroPlanta || '')}" id="filtro-planta" aria-label="Filtrar variáveis">
-                <a class="btn btn-secondary btn-sm" href="#/sinotico/${pl.id}">${icone('sinotico')} Sinótico</a><a class="btn btn-secondary btn-sm" href="#/configurar/${pl.id}">${icone('configurar')} Configurar</a></div>
+                <a class="btn btn-secondary btn-sm" href="#/sinotico/${pl.id}">${icone('sinotico')} Sinótico</a><a class="btn btn-secondary btn-sm" href="#/configurar/${pl.id}">${icone('configurar')} Configurar</a><button type="button" class="btn btn-danger btn-sm" data-acao="cfg-excluir" data-pl="${pl.id}">${icone('lixo')} Excluir planta</button></div>
             ${cmdsSoltos.length ? `<section class="card"><h2>Comandos</h2><div class="cmds">${cmdsSoltos.map(c => botaoComando(pl, c)).join('')}</div></section>` : ''}
             ${blocos.join('') || vazio(`Nenhuma variável ainda. <a class="btn btn-primary" href="#/configurar/${pl.id}">Adicionar variáveis</a>`)}</div>`;
     },
@@ -209,8 +214,11 @@ PAGINAS.sinotico = {
         const pl = SUP.planta(id) || pls[0];
         if (SinEd.pl !== pl) { SinEd.pl = pl; SinEd.sel = null; SinEd.desfazer = []; SinEd.refazer = []; SinEd.modoTubo = null; }
         const ed = SinEd.editando;
-        const paleta = `<input type="search" id="sin-busca" placeholder="Procurar símbolo (ex.: balança, guilhotina)" aria-label="Procurar símbolo">` + GRUPOS_SIMBOLOS.map(g => `<details class="paleta-grupo"${['Recebimento e caminhões', 'Ligações'].includes(g) ? ' open' : ''}><summary>${g} <small>(${Object.values(SIMBOLOS).filter(S => S.grupo === g).length})</small></summary><div class="paleta-itens">
-            ${Object.entries(SIMBOLOS).filter(([, S]) => S.grupo === g).map(([k, S]) => `<button type="button" class="paleta-item" data-acao="sin-add" data-s="${k}" title="${escAttr(S.nome)}" data-busca="${escAttr((S.nome + ' ' + g).toLowerCase())}">${miniSimbolo(k)}<span>${esc(S.nome)}</span></button>`).join('')}</div></details>`).join('');
+        const aba = SinEd.aba || 'elementos', nAba = a => Object.entries(SIMBOLOS).filter(([k, S]) => abaSimbolo(k, S) === a).length;
+        const paleta = `<div class="seg paleta-abas" role="tablist" aria-label="Tipo de símbolo">${[['elementos', 'Elementos'], ['acionamentos', 'Acionamentos'], ['sensores', 'Sensores']].map(([a, n]) => `<button type="button" role="tab" class="seg-btn${aba === a ? ' ativo' : ''}" aria-selected="${aba === a}" data-sin-aba="${a}">${n} <small>${nAba(a)}</small></button>`).join('')}</div>
+            <p class="nota paleta-dica">${{ elementos: 'Máquinas, silos, transportadores, tubulações. Cada um tem o ponto dos sensores (círculo pequeno vazado).', acionamentos: 'Motores, inversores, CCM, CLP, válvulas atuadas, botoeiras e chaves: o que liga, desliga e posiciona.', sensores: 'Selecione o elemento antes (ou escolha depois): o sensor nasce ligado ao ponto dos sensores dele, com tópico área/elemento/sensor.' }[aba]}</p>
+            <input type="search" id="sin-busca" placeholder="Procurar símbolo (ex.: balança, metano)" aria-label="Procurar símbolo">` + GRUPOS_SIMBOLOS.map(g => `<details class="paleta-grupo"${['Recebimento e caminhões', 'Ligações', 'Sensores', 'Elétrica e automação'].includes(g) ? ' open' : ''}><summary>${g} <small></small></summary><div class="paleta-itens">
+            ${Object.entries(SIMBOLOS).filter(([, S]) => S.grupo === g).map(([k, S]) => `<button type="button" class="paleta-item" data-acao="sin-add" data-s="${k}" data-aba="${abaSimbolo(k, S)}" title="${escAttr(S.nome)}" data-busca="${escAttr((S.nome + ' ' + g).toLowerCase())}">${miniSimbolo(k)}<span>${esc(S.nome)}</span></button>`).join('')}</div></details>`).join('');
         return `<div class="container container-largo">${cabecalho(`${icone('sinotico')} Sinótico`, ed ? 'Editando: ao inserir um símbolo, o equipamento, as variáveis e os comandos já são criados com tópico e unidade; clique no símbolo para editar os tópicos.' : 'Passe o mouse nos valores para ver o histórico; clique num equipamento para abrir os valores e comandos dele; clique nas chaves para comandar.',
             `<select id="sin-planta" aria-label="Planta">${pls.map(p => `<option value="${p.id}"${p === pl ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select>${chipConexao(pl)}
              <button type="button" class="btn ${ed ? 'btn-primary' : 'btn-secondary'} btn-sm" data-acao="sin-editar">${icone('editar')} ${ed ? 'Concluir edição' : 'Editar desenho'}</button>`)}
@@ -240,11 +248,14 @@ PAGINAS.sinotico = {
             if (el.dataset.sintag) sinMarcarTag(el.dataset.sintag, el.checked);
         });
         const busca = $('#sin-busca', raiz);
-        if (busca) busca.addEventListener('input', () => {
-            const q = busca.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-            $$('.paleta-item', raiz).forEach(b => { b.hidden = !!q && !b.dataset.busca.normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q); });
-            $$('.paleta-grupo', raiz).forEach(d => { const vis = $$('.paleta-item', d).some(b => !b.hidden); d.hidden = !vis; if (q) d.open = vis; });
-        });
+        // filtro da paleta: a aba escolhida; procurando, acha em todas as abas
+        const filtrar = () => {
+            const q = busca ? busca.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') : '', aba = SinEd.aba || 'elementos';
+            $$('.paleta-item', raiz).forEach(b => { b.hidden = q ? !b.dataset.busca.normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q) : b.dataset.aba !== aba; });
+            $$('.paleta-grupo', raiz).forEach(d => { const n = $$('.paleta-item', d).filter(b => !b.hidden).length; d.hidden = !n; d.querySelector('summary small').textContent = `(${n})`; if (q) d.open = !!n; });
+        };
+        if (busca) { busca.addEventListener('input', filtrar); filtrar(); }
+        raiz.addEventListener('click', e => { const b = e.target.closest('[data-sin-aba]'); if (!b) return; SinEd.aba = b.dataset.sinAba; $$('[data-sin-aba]', raiz).forEach(x => { x.classList.toggle('ativo', x === b); x.setAttribute('aria-selected', x === b); }); $('.paleta-dica', raiz).textContent = { elementos: 'Máquinas, silos, transportadores, tubulações. Cada um tem o ponto dos sensores (círculo pequeno vazado).', acionamentos: 'Motores, inversores, CCM, CLP, válvulas atuadas, botoeiras e chaves: o que liga, desliga e posiciona.', sensores: 'Selecione o elemento antes (ou escolha depois): o sensor nasce ligado ao ponto dos sensores dele, com tópico área/elemento/sensor.' }[SinEd.aba]; if (busca) busca.value = ''; filtrar(); });
         const palco = $('#sin-palco', raiz);
         if (SinEd.zoom === 1 && !SinEd._ajustado) { SinEd._ajustado = true; SinEd.zoom = Math.max(0.3, Math.min(1.2, (palco.clientWidth - 4) / SinEd.pl.sinotico.largura)); }
         sinRedesenhar();

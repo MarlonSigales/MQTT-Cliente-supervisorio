@@ -182,3 +182,31 @@ Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referên
    arquivos e bytes do dia. QA: teste de ida e volta refeito (buffer junta, leitor apaga, só mudanças, receber tudo).
 46 [futuro] Original como serviço (Node) para não depender de uma aba aberta; estimativa de cota por planta na tela.
 
+--- Versão 5 (29/10/2026) — UBG de arroz de exemplo no broker.emqx.io, status, sensores em todo elemento
+47 [resolvido] Exemplo UBG de arroz completa (destaque no Início): recebimento, pré-limpeza, secador + fornalha, 2 silos,
+   aeração, correia, silo pulmão, balança de fluxo, limpeza, despedregador, descascador, mesa de marinheiros, aspirador +
+   ciclone de casca, brunidor, polidor, filtro de farelo, trieur, selecionadora óptica, balanças de subprodutos, ensacadora
+   e caminhões; 41 elementos, ~210 variáveis, 33 comandos, 41 linhas ligadas porta a porta; tópicos área/elemento/grandeza;
+   rendimento de inteiros e quebrados calculados; alarmes por equação (subvelocidade com motor ligado, aeração com ar úmido).
+48 [resolvido] Planta virtual num broker de verdade: no navegador ("Rodar a planta virtual neste navegador") ou sem
+   navegador (node campo/planta-virtual.js). Balanço de massa do engenho, intertravamento da linha, setpoints (ar de
+   secagem, vazão, pressão dos rolos, peso do saco) e um escorregamento periódico no elevador do despedregador para
+   demonstrar alarme.
+49 [resolvido] Status: <prefixo>/status/get → <prefixo>/status com todos os tópicos (sentido, nome, unidade, faixa,
+   elemento, último valor). "Pedir status" na Conexão abre a lista com filtro e marca o que não está configurado.
+50 [resolvido] Paleta em abas: Elementos, Acionamentos (motores, inversores, CCM, CLP, válvulas atuadas, botoeiras) e
+   Sensores. Todo elemento tem o "ponto dos sensores" (entrada de sinal); o sensor inserido nasce ligado nele, e ligar
+   com L a saída do sensor no ponto prende o sensor ao elemento (tópico área/elemento/sensor).
+51 [resolvido] Sensores típicos já no kit: elevadores, correias, redlers e roscas com rotação/velocidade e
+   escorregamento (+ entupimento, mancal); silos e armazéns com termometria máx/méd/mín, espaço livre, UR intergranular,
+   umidade do grão, CO₂, metano, fosfina, O₂ e nível alto; secador com umidade de entrada, exaustão e faísca; fornalha
+   com depressão e O₂; ventiladores e máquinas com vibração e mancal; ciclones com perda de carga. Novos símbolos de
+   sensor: rotação, escorregamento, mancal, vibração, metano, fosfina, O₂, cabo de termometria e de umidade.
+52 [resolvido] Excluir: planta (também na página da planta), elemento inteiro (variáveis, comandos, sensores, desenho e
+   linhas; no sinótico e na página da planta) e "Apagar conexão" (endereço, usuário, senha e prefixo).
+   QA: 30 testes ok (UBG: tópicos únicos área/elemento/grandeza, toda linha saída→entrada do mesmo tipo, todo sensor e
+   comando com modelo, valores chegando, status completo, intertravamento; ponto dos sensores em todos os elementos,
+   abas, excluir); planta virtual em Node contra broker local: 216 tópicos no status, comando desliga e religa a linha,
+   setpoint muda a vazão; no navegador com broker real local: 183/183 variáveis com valor, janela de status com filtro.
+   Não testado contra o broker.emqx.io daqui (rede do ambiente de testes bloqueia), só contra o broker local.
+
