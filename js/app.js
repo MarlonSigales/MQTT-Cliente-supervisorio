@@ -8,7 +8,7 @@
 
 'use strict';
 
-const App = { rota: 'inicio', param: '', pagina: null, versao: '20261028a' };
+const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029a' };
 const PAGINAS = {};        // nome → { titulo, render(param) → html, montar?(raiz, param), atualizar?(sujos, forcar) }
 const ACOES = {};          // data-acao → função(botão, evento)
 
@@ -122,6 +122,7 @@ document.addEventListener('change', e => {
     const a = alvoRef(el.dataset.ref);
     if (!a) return;
     a.obj[a.chave] = valorDoCampo(el);
+    if (a.chave === 'topico') a.obj.topicoAuto = false;     // editado à mão: não acompanha mais o nome do símbolo
     SUP.alterado(el.dataset.ref.split(':')[0]);
     if (el.dataset.depois && ACOES[el.dataset.depois]) ACOES[el.dataset.depois](el, e);
     if ('rerender' in el.dataset) renderPagina(true);
@@ -261,7 +262,7 @@ function renderPagina(manterRolagem = false) {
     document.title = (P.titulo ? (typeof P.titulo === 'function' ? P.titulo(App.param) : P.titulo) + ' — ' : '') + 'Supervisório MQTT';
     document.body.classList.remove('menu-aberto');
 }
-window.addEventListener('hashchange', () => { const t = document.querySelector('.tour'); if (t) t.remove(); renderPagina(); });
+window.addEventListener('hashchange', () => { document.querySelectorAll('.tour, .faceplate-fundo').forEach(t => t.remove()); renderPagina(); });
 
 RT.ouvintes.add((tipo, sujos, forcar) => {
     if (tipo !== 'valores') return;

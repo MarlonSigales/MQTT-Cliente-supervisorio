@@ -2,7 +2,7 @@
 
 TODO / QA — Supervisório MQTT (cliente MQTT supervisório)
 Marcadores: [fazer] [futuro] [resolvido] [rejeitado] [parcial]
-Atualizado em 28/10/2026 (versão 1). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
+Atualizado em 29/10/2026 (versão 2). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
 
 === DIRETRIZES PERMANENTES
 - SIMPLES PARA QUALQUER UM: um operador de unidade armazenadora tem que conseguir usar sem ler manual.
@@ -46,6 +46,10 @@ Atualizado em 28/10/2026 (versão 1). Os números são fixos (servem de referên
    computador com a página aberta (avisado na tela Nuvem e no relatório dos horímetros).
 30 [futuro] Tópicos em lote (um JSON com várias leituras, Sparkplug B), MQTT 5 e publicação QoS 2.
 31 [futuro] Funcionar sem internet como aplicativo instalável (PWA) e importar CSV de dados de outro sistema.
+38 [futuro] Tubulação que "gruda" nos bocais dos símbolos (pontos de conexão) e acompanha quando o símbolo é movido;
+   hoje o tubo é desenhado à parte (L) e se move sozinho.
+39 [futuro] Animação do material por produto (casca, farelo, quebrados, inteiros) nas linhas, como no simulador Garten Flow,
+   e cor de linha por produto (com legenda), mantendo o fundo neutro da ISA-101.
 
 === REJEITADO
 (nenhum)
@@ -106,3 +110,34 @@ Atualizado em 28/10/2026 (versão 1). Os números são fixos (servem de referên
    número com vírgula, JSON com caminho, comando chegou, Last Will publicado, reconectou após derrubar o broker);
    3 modelos rodando juntos 25 s; todas as telas em 360/768/1024/1920 px sem estouro e sem erros no console;
    relatório conferido com um dia sintético; editor do sinótico (inserir, mover, tubo, desfazer) e controle (colar ganhos).
+
+--- Versão 2 (29/10/2026) — biblioteca do sinótico (pedido de 28/10/2026, referência: simulador Garten Flow e ISA 5.1)
+32 [resolvido] Biblioteca com 137 símbolos em 17 grupos e busca: caminhões (graneleiro, basculante, bitrem, baú), tombador,
+   amostrador; balanças de fluxo contínuo (vertical), de fita, ensacadora, duplo ensaque, expedição a granel (suspensa),
+   big bag, casca/farelo e plataforma; UBG de arroz (máquina de limpeza, descascador, separador de marinheiros, separador
+   de pedras, brunidor, polidor, peneira classificadora, classificador de espessura, trieur, selecionadora óptica,
+   separador magnético, encharcamento/autoclave, aspirador de casca); guilhotinas e comportas para material (manual,
+   pneumática, liga/desliga, proporcional, fumigação), desviadora 2 vias, desvio rápido, válvula rotativa, bica
+   telescópica, calha vibratória; ar e proteção (ventilador centrífugo, exaustor axial, registro borboleta, guilhotina de
+   ar, registro motorizado, ciclone, filtro de mangas, alívio e isolamento de explosão, gaveta deslizante, ventilação sem
+   chama, supressão); elétrica e automação (transformador, QGBT com medição, inversor, CLP, IHM, CCM); 19 sensores;
+   botoeira, botão, emergência, seletora manual/auto, sinaleiro; P&ID (ISA 5.1): válvulas gaveta, globo, esfera,
+   borboleta, retenção, 3 vias, agulha, alívio, controle, solenoide, motorizada, pneumática, redutora; bomba centrífuga
+   e de deslocamento, compressor, trocador, vaso, tanque, filtro Y, placa de orifício, rotâmetro, purgador, flange cego,
+   redução; bolhas de instrumento de campo, painel, CLP/SDCD, software e intertravamento (letras e número editáveis).
+33 [resolvido] Selecionadores e distribuidores para N saídas (2 a 16): distribuidor rotativo, selecionador linear,
+   selecionadora óptica e peneira classificadora; o setpoint "Escolher saída" acompanha o número de saídas.
+34 [resolvido] Kits pré-preenchidos: ao inserir o símbolo, já são criados o equipamento, as variáveis (tópico base
+   <equipamento>/<grandeza> com a unidade certa), limites de alarme usuais, comandos (liga, abrir, setpoint), potência
+   por equação e horímetro pela corrente nos motores; sensores avulsos em sensores/<nome>, botões em comandos/<nome>,
+   entradas (emergência, sinaleiro) em entradas/<nome>. Clicar no símbolo (modo edição) mostra os tópicos, unidades e
+   mensagens para editar ali mesmo; renomear o símbolo renomeia o equipamento e atualiza os tópicos que ainda não foram
+   editados à mão.
+35 [resolvido] Tubulação pelo atalho L (L de novo, Enter ou Esc termina; Shift deixa inclinada), tipos de linha: material,
+   duto de ar e as linhas de P&ID (processo, pneumático //, elétrico tracejado, dados o-o, capilar ×, hidráulico L) e
+   seta de sentido; R gira o símbolo; ajuda dos atalhos na barra.
+36 [resolvido] Em operação, clicar num equipamento do sinótico abre o "faceplate" (valores ao vivo, estado, comandos,
+   gráfico e configurar), como pede a ISA-101.
+   QA: 24 testes automáticos ok (todos os 137 símbolos desenham, kits sem erro de equação, nomes únicos, tópicos e
+   unidades conferidos, renomear e N saídas); editor no navegador (busca, inserir, renomear, editar tópico, atalho L,
+   N saídas, faceplate) sem erros; telas em 360/768/1024/1920 px sem estouro.

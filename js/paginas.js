@@ -204,15 +204,18 @@ PAGINAS.sinotico = {
         const pl = SUP.planta(id) || pls[0];
         if (SinEd.pl !== pl) { SinEd.pl = pl; SinEd.sel = null; SinEd.desfazer = []; SinEd.refazer = []; SinEd.modoTubo = null; }
         const ed = SinEd.editando;
-        const paleta = GRUPOS_SIMBOLOS.map(g => `<details class="paleta-grupo"${['Armazenagem', 'Secagem', 'Ligações'].includes(g) ? ' open' : ''}><summary>${g}</summary><div class="paleta-itens">
-            ${Object.entries(SIMBOLOS).filter(([, S]) => S.grupo === g).map(([k, S]) => `<button type="button" class="paleta-item" data-acao="sin-add" data-s="${k}" title="${escAttr(S.nome)}">${miniSimbolo(k)}<span>${esc(S.nome)}</span></button>`).join('')}</div></details>`).join('');
-        return `<div class="container container-largo">${cabecalho(`${icone('sinotico')} Sinótico`, ed ? 'Editando: arraste os símbolos; ao inserir um equipamento ele já é criado na planta. Delete apaga, Ctrl+Z desfaz.' : 'Passe o mouse nos valores para ver o histórico; clique nas chaves para comandar.',
+        const paleta = `<input type="search" id="sin-busca" placeholder="Procurar símbolo (ex.: balança, guilhotina)" aria-label="Procurar símbolo">` + GRUPOS_SIMBOLOS.map(g => `<details class="paleta-grupo"${['Recebimento e caminhões', 'Ligações'].includes(g) ? ' open' : ''}><summary>${g} <small>(${Object.values(SIMBOLOS).filter(S => S.grupo === g).length})</small></summary><div class="paleta-itens">
+            ${Object.entries(SIMBOLOS).filter(([, S]) => S.grupo === g).map(([k, S]) => `<button type="button" class="paleta-item" data-acao="sin-add" data-s="${k}" title="${escAttr(S.nome)}" data-busca="${escAttr((S.nome + ' ' + g).toLowerCase())}">${miniSimbolo(k)}<span>${esc(S.nome)}</span></button>`).join('')}</div></details>`).join('');
+        return `<div class="container container-largo">${cabecalho(`${icone('sinotico')} Sinótico`, ed ? 'Editando: ao inserir um símbolo, o equipamento, as variáveis e os comandos já são criados com tópico e unidade; clique no símbolo para editar os tópicos.' : 'Passe o mouse nos valores para ver o histórico; clique num equipamento para abrir os valores e comandos dele; clique nas chaves para comandar.',
             `<select id="sin-planta" aria-label="Planta">${pls.map(p => `<option value="${p.id}"${p === pl ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select>${chipConexao(pl)}
              <button type="button" class="btn ${ed ? 'btn-primary' : 'btn-secondary'} btn-sm" data-acao="sin-editar">${icone('editar')} ${ed ? 'Concluir edição' : 'Editar desenho'}</button>`)}
             <div class="sin-barra">
                 <button type="button" class="btn btn-secondary btn-sm" data-sin="zoom-" title="Diminuir">−</button><button type="button" class="btn btn-secondary btn-sm" data-sin="zoom-ajustar" title="Caber na tela">${icone('ajustar')}</button><button type="button" class="btn btn-secondary btn-sm" data-sin="zoom+" title="Aumentar">+</button>
                 ${ed ? `<button type="button" class="btn btn-secondary btn-sm" data-sin="desfazer">↶ Desfazer</button><button type="button" class="btn btn-secondary btn-sm" data-sin="refazer">↷ Refazer</button>
-                <button type="button" class="btn btn-primary btn-sm" data-sin="terminar-tubo" hidden>✓ Terminar tubo</button>` : ''}
+                <button type="button" class="btn btn-secondary btn-sm" data-acao="sin-add" data-s="tubo" title="Desenhar tubulação (atalho L)">╰ Tubulação <kbd>L</kbd></button>
+                <select id="sin-estilo-tubo" aria-label="Tipo de linha das novas tubulações">${Object.entries(ESTILOS_TUBO).map(([k, n]) => `<option value="${k}"${(SinEd.estiloTubo || 'material') === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>
+                <button type="button" class="btn btn-primary btn-sm" data-sin="terminar-tubo" hidden>✓ Terminar tubo</button>
+                <details class="balao-info"><summary>⌨ Atalhos</summary><div class="balao-info-corpo"><p><kbd>L</kbd> tubulação (de novo para terminar) · <kbd>Shift</kbd> linha inclinada · <kbd>Enter</kbd>/<kbd>Esc</kbd> terminar tubo</p><p><kbd>R</kbd> girar · <kbd>Delete</kbd> excluir · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicar · <kbd>Ctrl</kbd>+<kbd>Z</kbd> desfazer · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> refazer · setas movem (Shift: 1 px)</p></div></details>` : ''}
                 <button type="button" class="btn btn-secondary btn-sm" data-acao="sin-baixar">${icone('baixar')} SVG</button>
                 ${pl.sinotico.elementos.length ? '' : `<span class="nota">Desenho vazio: clique em "Editar desenho" ou use um modelo pronto no Início.</span>`}
             </div>
@@ -227,9 +230,17 @@ PAGINAS.sinotico = {
         raiz.addEventListener('click', e => { const b = e.target.closest('[data-sin]'); if (b) sinAcao(b.dataset.sin); });
         raiz.addEventListener('change', e => {
             const el = e.target;
-            if (el.dataset.sinp) sinMudarPropriedade(el.dataset.sinp, el.type === 'number' ? el.value : el.value);
+            if (el.dataset.sinp) sinMudarPropriedade(el.dataset.sinp, el.type === 'checkbox' ? el.checked : el.value);
             if (el.dataset.sintag) sinMarcarTag(el.dataset.sintag, el.checked);
         });
+        const busca = $('#sin-busca', raiz);
+        if (busca) busca.addEventListener('input', () => {
+            const q = busca.value.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+            $$('.paleta-item', raiz).forEach(b => { b.hidden = !!q && !b.dataset.busca.normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q); });
+            $$('.paleta-grupo', raiz).forEach(d => { const vis = $$('.paleta-item', d).some(b => !b.hidden); d.hidden = !vis; if (q) d.open = vis; });
+        });
+        const est = $('#sin-estilo-tubo', raiz);
+        if (est) est.addEventListener('change', () => { SinEd.estiloTubo = est.value; if (SinEd.modoTubo) SinEd.modoTubo.estilo = est.value; });
         const palco = $('#sin-palco', raiz);
         if (SinEd.zoom === 1 && !SinEd._ajustado) { SinEd._ajustado = true; SinEd.zoom = Math.max(0.3, Math.min(1.2, (palco.clientWidth - 4) / SinEd.pl.sinotico.largura)); }
         sinRedesenhar();

@@ -174,7 +174,8 @@ function criarTag(p = {}) {
         limites: Object.assign({ ativo: false, ll: null, l: null, h: null, hh: null, histerese: 0, atrasoS: 5, semDadosS: 120,
             prioridadeExtremos: 2, prioridadeAvisos: 3 }, p.limites || {}),
         registro: Object.assign({ banda: 0, minS: 1, maxS: 60 }, p.registro || {}),
-        ctl: p.ctl || null
+        ctl: p.ctl || null,
+        topicoAuto: !!p.topicoAuto, kitS: p.kitS || ''     // tópico gerado pelo símbolo (acompanha o nome até ser editado)
     };
 }
 function criarComando(p = {}) {

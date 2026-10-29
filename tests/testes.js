@@ -297,6 +297,51 @@ teste('Relatório: monta com os dados e escapa nomes', async () => {
     ok(html.includes('<svg'), 'gráfico em SVG');
 });
 
+// ---------------------------------------------------------------- biblioteca v2 do sinótico
+teste('Biblioteca do sinótico: todos os símbolos desenham e os kits criam variáveis, tópicos e comandos', () => {
+    const pl = plantaEmBranco('Kits'); pl.conexao.prefixo = 'ubg';
+    SUP.p = criarProjetoVazio(); SUP.p.plantas.push(pl);
+    const ks = Object.keys(SIMBOLOS).filter(k => k !== 'tubo');
+    ok(ks.length >= 120, 'biblioteca com ' + ks.length + ' símbolos');
+    ['caminhao_graneleiro', 'carreta_bitrem', 'balanca_fluxo', 'ensacadora', 'ensacadora_dupla', 'balanca_expedicao', 'descascador', 'separador_marinheiros', 'brunidor', 'polidor',
+        'selecionadora_optica', 'guilhotina_manual', 'guilhotina_pneumatica', 'guilhotina_ar', 'registro_borboleta_ar', 'distribuidor_n', 'selecionador_n', 'v_controle', 'v_solenoide', 'pid_inst_campo', 'botoeira', 'emergencia']
+        .forEach(k => ok(SIMBOLOS[k], 'falta o símbolo ' + k));
+    for (const k of ks) {
+        const S = SIMBOLOS[k];
+        const el = { id: uid('el'), s: k, x: 0, y: 0, w: S.w, h: S.h, rot: 0, rotulo: S.equip ? nomeCurtoSimbolo(S) : '', tags: [] };
+        if (S.n) el.n = S.n;
+        aplicarKitSimbolo(pl, el, S);
+        pl.sinotico.elementos.push(el);
+        ok(svgElemento(pl, el, false).includes('sin-el'), 'desenho de ' + k);
+        ok(miniSimbolo(k).includes('<svg'), 'miniatura de ' + k);
+    }
+    prepararPlanta(pl);
+    igual([...RT.errosCalc.entries()].filter(([id]) => pl.tags.some(t => t.id === id)), [], 'equações dos kits compilam');
+    igual(new Set(pl.tags.map(t => t.variavel)).size, pl.tags.length, 'nomes de variável únicos');
+    const sem = pl.tags.filter(t => t.origem === 'mqtt' && !t.topico); igual(sem.map(t => t.nome), [], 'toda variável MQTT tem tópico');
+    const elev = pl.tags.find(t => t.nome === 'Corrente — Elevador de canecas 1');
+    igual(topicoCompleto(pl, elev.topico), 'ubg/elevador_de_canecas_1/corrente'); igual(elev.unidade, 'A'); ok(elev.limites.ativo, 'limite de corrente');
+    const eqElev = pl.equipamentos.find(e => e.nome === 'Elevador de canecas 1');
+    ok(eqElev.horimetro.ativo && eqElev.tagPotencia, 'horímetro e potência do motor');
+    const ens = pl.comandos.find(c => c.nome.startsWith('Peso do saco') && c.tipo === 'setpoint'); igual([ens.unidade, ens.topico], ['kg', 'balanca_ensacadora_1/sp_peso']);
+    const sel = pl.sinotico.elementos.find(e => e.s === 'selecionadora_optica'); igual(sel.n, 3);
+    const tt = pl.tags.find(t => t.kitS === 'sensor' && t.tipo === 'temperatura'); igual([tt.unidade, tt.topico.split('/')[0]], ['°C', 'sensores']);
+    const bot = pl.comandos.find(c => c.kitS === 'comando'); ok(bot && bot.topico.startsWith('comandos/'), 'botão com tópico');
+});
+teste('Sinótico: renomear atualiza os tópicos automáticos; tópico editado à mão fica; N saídas e linhas P&ID', () => {
+    const pl = plantaEmBranco('Ren'); SUP.p = criarProjetoVazio(); SUP.p.plantas.push(pl);
+    const S = SIMBOLOS.distribuidor_n, el = { id: uid('el'), s: 'distribuidor_n', x: 0, y: 0, w: S.w, h: S.h, rotulo: nomeCurtoSimbolo(S), tags: [], n: 4 };
+    aplicarKitSimbolo(pl, el, S); pl.sinotico.elementos.push(el);
+    const cmd = pl.comandos.find(c => c.kitS === 'sp_saida'); igual(cmd.max, 4);
+    el.n = 6; ajustarSaidasComando(pl, el); igual(cmd.max, 6);
+    const t = pl.tags.find(x => x.kitS === 'saida'); t.topico = 'campo/dist/pos'; t.topicoAuto = false;
+    renomearPeloRotulo(pl, el, el.rotulo, 'Distribuidor Silos A');
+    igual(cmd.topico, 'distribuidor_silos_a/sp_saida', 'automático acompanha'); igual(t.topico, 'campo/dist/pos', 'editado fica');
+    ok(SUP.equipamento(el.eq).nome === 'Distribuidor Silos A');
+    ok(marcasTubo([[0, 0], [200, 0]], 'pneumatico').includes('tubo-marca')); igual(marcasTubo([[0, 0], [200, 0]], 'material'), '');
+    ok(svgElemento(pl, { id: 'x', s: 'tubo', pts: [[0, 0], [100, 0]], estilo: 'dados', seta: true }, false).includes('marker-end'));
+});
+
 // ---------------------------------------------------------------- MEGA simulado (mesma interface usada do megajs)
 function megaSimulado() {
     let ts = Math.floor(Date.now() / 1000);

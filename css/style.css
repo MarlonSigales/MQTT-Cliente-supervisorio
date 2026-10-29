@@ -441,3 +441,49 @@ body.sin-desenhando .sin-svg { cursor: crosshair; }
   body[data-pagina="relatorios"] .main-content { padding: 0; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } }
+
+/* ---------------- biblioteca v2 do sinótico: símbolos, linhas P&ID, tópicos e faceplate ---------------- */
+svg .detalhe.grosso { stroke-width: 3; }
+svg .detalhe.cheio { fill: #4b5b59; }
+svg .saco { fill: #efe9dc; }
+svg .duto { fill: #eef2f1; stroke-dasharray: none; }
+.sin-letra { font-size: 11px; font-weight: 700; fill: #2c3b39; pointer-events: none; }
+.sin-el.est-trabalhando .sin-letra { fill: #fff; }
+svg .botao-liga { fill: #dfe7e5; stroke: #4b5b59; stroke-width: 1.5; }
+svg .botao-desliga { fill: #f1f4f3; stroke: #4b5b59; stroke-width: 1.5; }
+svg .emerg-fundo { fill: #f5e7a8; }
+svg .emerg { fill: #b3261e; stroke: #6f1712; stroke-width: 2; }
+svg .lampada { fill: #f1f4f3; stroke: #4b5b59; stroke-width: 1.5; }
+.aceso .lampada { fill: #f0c94a; }
+.aceso .botao-liga { fill: #2f6e70; }
+.sin-simbolo.ligado .botao-liga { fill: #2f6e70; }
+.sin-el.al-p1 .emerg-fundo { stroke: var(--p1); stroke-width: 3.5; }
+.sin-rotulo.pequeno { font-size: 11px; font-weight: 600; }
+.seta-ponta { fill: #7d8c8a; }
+.sin-tubo.tubo-ar .tubo-fundo { stroke: #7d8c8a; stroke-width: 14; }
+.sin-tubo.tubo-ar .tubo-linha { stroke: #f3f5f4; stroke-width: 10; }
+.sin-tubo.tubo-ar.est-trabalhando .tubo-linha { stroke: #dfeceb; }
+.sin-tubo.tubo-processo .tubo-fundo, .sin-tubo.tubo-pneumatico .tubo-fundo, .sin-tubo.tubo-eletrico .tubo-fundo, .sin-tubo.tubo-dados .tubo-fundo, .sin-tubo.tubo-capilar .tubo-fundo, .sin-tubo.tubo-hidraulico .tubo-fundo { stroke: transparent; }
+.sin-tubo.tubo-processo .tubo-linha { stroke: #2c3b39; stroke-width: 2.5; }
+.sin-tubo.tubo-pneumatico .tubo-linha, .sin-tubo.tubo-capilar .tubo-linha, .sin-tubo.tubo-hidraulico .tubo-linha { stroke: #2c3b39; stroke-width: 1.3; }
+.sin-tubo.tubo-eletrico .tubo-linha { stroke: #2c3b39; stroke-width: 1.3; stroke-dasharray: 8 5; }
+.sin-tubo.tubo-dados .tubo-linha { stroke: #2c3b39; stroke-width: 1.3; }
+.tubo-marca { fill: none; stroke: #2c3b39; stroke-width: 1.3; }
+.tubo-marca-c { fill: #fff; stroke: #2c3b39; stroke-width: 1.2; }
+.sin-tubo[class*="tubo-p"] .tubo-fluxo, .sin-tubo.tubo-eletrico .tubo-fluxo, .sin-tubo.tubo-dados .tubo-fluxo, .sin-tubo.tubo-capilar .tubo-fluxo, .sin-tubo.tubo-hidraulico .tubo-fluxo { display: none; }
+#sin-busca { margin-bottom: 0.4rem; }
+.paleta-grupo > summary small { font-weight: 400; color: var(--suave); }
+#sin-estilo-tubo { width: auto; max-width: 240px; font-size: 0.84rem; padding: 0.28rem 0.4rem; }
+kbd { background: #fff; border: 1px solid var(--borda); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 0.78em; font-family: inherit; }
+.sin-topicos { border: 1px solid var(--borda); border-radius: 6px; padding: 0.35rem 0.5rem 0.5rem; margin: 0.5rem 0; }
+.sin-topicos legend { font-size: 0.8rem; color: var(--teal); font-weight: 700; padding: 0 0.3rem; }
+.sin-top-linha { display: grid; grid-template-columns: 1fr 64px; gap: 0.2rem 0.3rem; margin-bottom: 0.45rem; align-items: center; }
+.sin-top-nome { font-size: 0.78rem; min-width: 0; font-weight: 600; color: var(--texto); display: flex; gap: 0.25rem; align-items: center; }
+.sin-top-linha input { font-size: 0.8rem; padding: 0.25rem 0.4rem; font-family: Consolas, monospace; }
+.sin-top-linha.cmd { grid-template-columns: 1fr; }
+.sin-top-payloads { display: grid; grid-template-columns: 1fr 1fr; gap: 0.3rem; }
+.sin-top-linha .expr-conf, .sin-top-topico, .sin-top-linha.cmd > input, .sin-top-payloads { grid-column: 1 / -1; }
+.sin-top-linha.cmd { grid-template-columns: 1fr; }
+.faceplate { width: min(100%, 760px); }
+.faceplate .card-topo h2 { font-size: 1.1rem; }
+.faceplate .cmds { margin: 0 0 0.6rem; }

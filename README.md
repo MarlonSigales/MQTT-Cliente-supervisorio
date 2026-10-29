@@ -18,8 +18,9 @@ Feito para unidades de pós-colheita e armazenagem, laboratórios e pequenas ind
   realimentação de estados com observador) com ganhos carregados de arquivo .m/.json, colados ou recebidos por MQTT, e
   sintonia pelo degrau no histórico.
 - **Horímetros**: desligado, ligado em vazio e trabalhando; partidas, utilização e energia gasta em vazio.
-- **Sinótico**: desenho da planta com símbolos de pós-colheita (moega, secador, fornalha, elevador, redler, silos com aeração…)
-  e **modelos prontos** com simulação para testar sem broker.
+- **Sinótico**: 137 símbolos (UBG de arroz, balanças, caminhões, guilhotinas e comportas para material e ar, selecionadores de
+  N saídas, proteção contra explosão, elétrica e P&ID da ISA 5.1). Ao inserir, as variáveis e os comandos já nascem com tópico
+  e unidade; tubulação pelo atalho **L**; **modelos prontos** com simulação para testar sem broker.
 - **Relatórios** do período (energia e custo, horímetros, variáveis, gráficos, alarmes, comandos) em PDF, HTML e CSV.
 - **Logs**, monitor MQTT, publicar à mão e **descobrir tópicos** (cria as variáveis com um clique).
 - **Nuvem da equipe (MEGA)**: configuração com versões e os **dados passados**, um arquivo por planta e por dia.

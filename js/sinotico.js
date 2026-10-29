@@ -77,8 +77,10 @@ const GRUPOS_SIMBOLOS = ['Recebimento', 'Beneficiamento', 'Secagem', 'Transporte
 function miniSimbolo(s) {
     const S = SIMBOLOS[s];
     if (s === 'tubo') return `<svg viewBox="0 0 60 40" class="sin-mini"><path class="tubo-linha" d="M4 30 H30 V10 H56" fill="none"/></svg>`;
+    if (S.instrumento) return `<svg viewBox="-2 -2 ${S.w + 4} ${S.h + 4}" class="sin-mini">${svgInstrumento(S.w, S.h, S.instrumento, 'TT', '101')}</svg>`;
+    if (S.sensor && !S.svg) return `<svg viewBox="-2 -2 ${S.w + 4} ${S.h + 4}" class="sin-mini"><circle class="bolha" cx="${S.w / 2}" cy="${S.h / 2}" r="${S.w / 2 - 2}"/><text class="sensor-sigla" x="${S.w / 2}" y="${S.h / 2 + 4}" text-anchor="middle">${S.sigla || 'XT'}</text></svg>`;
     if (!S.svg) return `<svg viewBox="0 0 60 40" class="sin-mini"><rect class="corpo" x="6" y="10" width="48" height="20" rx="4"/><text x="30" y="24" text-anchor="middle" font-size="10">${s === 'texto' ? 'Abc' : s === 'area' ? '▭' : s === 'chave' ? 'I/O' : s === 'setpoint' ? 'SP' : '12,3'}</text></svg>`;
-    return `<svg viewBox="-4 -4 ${S.w + 8} ${S.h + 8}" class="sin-mini sin-simbolo est-desligado">${S.svg(S.w, S.h)}</svg>`;
+    return `<svg viewBox="-4 -4 ${S.w + 8} ${S.h + 8}" class="sin-mini sin-simbolo est-desligado">${S.svg(S.w, S.h, {})}</svg>`;
 }
 
 // ---------------------------------------------------------------- desenho de um elemento
@@ -89,8 +91,9 @@ function svgElemento(pl, el, editando) {
         const pts = lista(el.pts);
         if (pts.length < 2) return '';
         const d = 'M' + pts.map(p => `${p[0]} ${p[1]}`).join(' L');
-        return `<g class="sin-el sin-tubo${el.eq ? '' : ' sem-eq'}" data-id="${el.id}" ${el.eq ? `data-eq="${el.eq}"` : ''}>
-            <path class="tubo-fundo" d="${d}"/><path class="tubo-linha" d="${d}"/><path class="tubo-fluxo" d="${d}"/>
+        const estilo = ESTILOS_TUBO[el.estilo] ? el.estilo : 'material';
+        return `<g class="sin-el sin-tubo tubo-${estilo}${el.eq ? '' : ' sem-eq'}" data-id="${el.id}" ${el.eq ? `data-eq="${el.eq}"` : ''}>
+            <path class="tubo-fundo" d="${d}"/><path class="tubo-linha" d="${d}"${el.seta ? ' marker-end="url(#sin-seta)"' : ''}/><path class="tubo-fluxo" d="${d}"/>${marcasTubo(pts, estilo)}
             ${editando ? `<path class="tubo-toque" d="${d}"/>` + pts.map((p, i) => `<circle class="sin-ponto" data-ponto="${i}" cx="${p[0]}" cy="${p[1]}" r="6"/>`).join('') : ''}
         </g>`;
     }
@@ -106,18 +109,24 @@ function svgElemento(pl, el, editando) {
             <text class="valor-nome" x="8" y="15">${esc(rot || (tg ? tg.nome : 'escolha a variável'))}</text>
             <text class="valor-num" x="${w - 8}" y="${h - 12}" text-anchor="end" data-v="${el.tag || ''}">—</text>
             <rect class="valor-barra-fundo" x="8" y="${h - 7}" width="${w - 16}" height="3"/><rect class="valor-barra" data-barra="${el.tag || ''}" x="8" y="${h - 7}" width="0" height="3"/>`;
-    } else if (el.s === 'sensor') {
+    } else if (S.instrumento) {
+        corpo = svgInstrumento(w, h, S.instrumento, el.codigo, el.numero) + (el.tag ? `<text class="sensor-valor" x="${w / 2}" y="${h + 14}" text-anchor="middle" data-v="${el.tag}">—</text>` : '');
+    } else if (S.sensor) {
         const tg = SUP.tag(el.tag);
-        corpo = S.svg(w, h) + `<text class="sensor-sigla" x="${w / 2}" y="${h / 2 + 4}" text-anchor="middle">${esc(rot || siglaTipo(tg && tg.tipo))}</text>
-            <text class="sensor-valor" x="${w / 2}" y="${h + 14}" text-anchor="middle" data-v="${el.tag || ''}">—</text>`;
+        const forma = S.svg ? S.svg(w, h, el) : `<circle class="bolha" cx="${w / 2}" cy="${h / 2}" r="${Math.min(w, h) / 2 - 2}"/><text class="sensor-sigla" x="${w / 2}" y="${h / 2 + 4}" text-anchor="middle">${esc(S.sigla || siglaTipo(tg && tg.tipo))}</text>`;
+        corpo = forma + `<text class="sensor-valor" x="${w / 2}" y="${h + 14}" text-anchor="middle" data-v="${el.tag || ''}">—</text>${rot ? `<text class="sin-rotulo pequeno" x="${w / 2}" y="-5" text-anchor="middle">${esc(rot)}</text>` : ''}`;
+    } else if ((S.comando || S.entrada) && S.svg) {
+        corpo = `<g class="sin-simbolo"${el.cmd ? ` data-cmd="${el.cmd}"` : ''}${el.tag ? ` data-entrada="${el.tag}"` : ''}>${S.svg(w, h, el)}</g><text class="sin-rotulo pequeno" x="${w / 2}" y="${h + 13}" text-anchor="middle">${esc(rot)}</text>`;
     } else if (el.s === 'chave' || el.s === 'setpoint') {
         const cm = pl.comandos.find(c => c.id === el.cmd);
         corpo = `<rect class="cmd-caixa" x="0" y="0" width="${w}" height="${h}" rx="${h / 2}" data-cmd="${el.cmd || ''}"/>
             <text class="cmd-texto" x="${w / 2}" y="${h / 2 + 4}" text-anchor="middle" data-cmdtxt="${el.cmd || ''}">${esc(rot || (cm ? cm.nome : 'escolha o comando'))}</text>`;
     } else {
-        corpo = `<g class="sin-simbolo">${S.svg(w, h)}</g>`;
+        const desenho = S.svg ? S.svg(w, h, el) : '';
+        corpo = `<g class="sin-simbolo">${desenho}</g>`;
         // nível (preenchimento) no silo/tanque/tulha
-        if (el.tagNivel) corpo = `<clipPath id="clip-${el.id}"><g>${S.svg(w, h).match(/<path class="corpo"[^>]*>|<rect class="corpo"[^>]*>/) ? S.svg(w, h).match(/<path class="corpo"[^>]*>|<rect class="corpo"[^>]*>/)[0] : ''}</g></clipPath>
+        const forma = desenho.match(/<path class="corpo"[^>]*>|<rect class="corpo"[^>]*>/);
+        if (el.tagNivel) corpo = `<clipPath id="clip-${el.id}"><g>${forma ? forma[0] : ''}</g></clipPath>
             ${corpo}<rect class="nivel-preench" clip-path="url(#clip-${el.id})" data-nivel="${el.tagNivel}" x="0" y="${h}" width="${w}" height="0"/>`;
         corpo += `<text class="sin-rotulo" x="${w / 2}" y="-6" text-anchor="middle">${esc(rot)}</text>`;
         const tags = lista(el.tags);
@@ -132,7 +141,7 @@ function svgElemento(pl, el, editando) {
 }
 /** Nome curto para caber no sinótico: "Temperatura da massa de grãos" → "T. massa grãos"; tira o nome do equipamento. */
 function abreviarNome(tg, el) {
-    let n = tg.nome;
+    let n = tg.nome.replace(/\s+—\s+.*$/, '');      // "Corrente — Elevador 1" → "Corrente"
     const eq = el && el.rotulo ? el.rotulo.toLowerCase() : '';
     const troca = [[/^Temperatura/i, 'T.'], [/^Umidade relativa/i, 'UR'], [/^Umidade/i, 'Umid.'], [/^Corrente/i, 'I'], [/^Potência/i, 'P'], [/^Pressão estática/i, 'P. est.'], [/^Pressão/i, 'P.'],
         [/^Tensão/i, 'V'], [/^Fator de potência/i, 'FP'], [/^Ponto de orvalho/i, 'T. orvalho'], [/^Abertura/i, 'Abert.'], [/^Energia/i, 'E']];
@@ -152,6 +161,7 @@ function svgSinotico(pl, editando = false) {
     const grade = editando ? `<defs><pattern id="sin-grade" width="${s.grade}" height="${s.grade}" patternUnits="userSpaceOnUse"><path d="M ${s.grade} 0 L 0 0 0 ${s.grade}" class="sin-grade"/></pattern></defs><rect width="${s.largura}" height="${s.altura}" fill="url(#sin-grade)"/>` : '';
     const ordem = [...s.elementos].sort((a, b) => (a.s === 'area' ? -1 : 0) - (b.s === 'area' ? -1 : 0) || (a.s === 'tubo' ? -1 : 0) - (b.s === 'tubo' ? -1 : 0));
     return `<svg class="sin-svg${editando ? ' editando' : ''}" viewBox="0 0 ${s.largura} ${s.altura}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Sinótico ${escAttr(pl.nome)}">
+        <defs><marker id="sin-seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="14" markerHeight="14" markerUnits="userSpaceOnUse" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 Z" class="seta-ponta"/></marker></defs>
         <rect class="sin-fundo" width="${s.largura}" height="${s.altura}"/>${grade}
         <g class="sin-conteudo">${ordem.map(el => svgElemento(pl, el, editando)).join('')}</g></svg>`;
 }
@@ -187,6 +197,11 @@ function atualizarSinotico(raiz, pl) {
         if (eq) pl.tags.filter(t => t.equipId === eq.id).forEach(t => { const a = alarmeDaTag(t.id); if (a && (!pior || a.prioridade < pior.prioridade)) pior = a; });
         [1, 2, 3, 4].forEach(p => g.classList.toggle('al-p' + p, !!pior && pior.prioridade === p));
         g.classList.toggle('al-piscar', !!pior && !pior.reconhecido);
+    });
+    raiz.querySelectorAll('[data-entrada]').forEach(n => {
+        const v = valorTag(n.getAttribute('data-entrada'));
+        n.classList.toggle('aceso', !!v); const al = alarmeDaTag(n.getAttribute('data-entrada'));
+        const g = n.closest('.sin-el'); if (g) { [1, 2, 3, 4].forEach(p => g.classList.toggle('al-p' + p, !!al && al.prioridade === p)); g.classList.toggle('al-piscar', !!al && !al.reconhecido); }
     });
     raiz.querySelectorAll('[data-cmd]').forEach(n => {
         const cm = pl.comandos.find(c => c.id === n.getAttribute('data-cmd')); if (!cm) return;
@@ -252,7 +267,9 @@ function sinEventos(svg) {
         const alvo = e.target.closest('.sin-el');
         const p = pontoSvg(svg, e);
         if (!SinEd.editando) {
-            if (alvo && (alvo.classList.contains('sin-chave') || alvo.classList.contains('sin-setpoint'))) { const el = pl.sinotico.elementos.find(x => x.id === alvo.dataset.id); if (el && el.cmd) acionarComandoTela(pl, el.cmd); return; }
+            const elc = alvo && pl.sinotico.elementos.find(x => x.id === alvo.dataset.id);
+            if (elc && elc.cmd && SIMBOLOS[elc.s] && SIMBOLOS[elc.s].comando) { acionarComandoTela(pl, elc.cmd); return; }
+            if (elc && elc.eq && !e.target.closest('[data-tag]')) { abrirFaceplate(pl, elc.eq); return; }
             // arrastar o fundo rola a área
             const palco = svg.parentElement; arr = { tipo: 'rolar', cx: e.clientX, cy: e.clientY, sl: palco.scrollLeft, st: palco.scrollTop };
             svg.setPointerCapture(e.pointerId); return;
@@ -326,29 +343,26 @@ function sinTerminarTubo() {
     if (m && m.pts.length >= 3) {
         m.pts.pop();
         const pts = m.pts.filter((p, i) => i === 0 || p[0] !== m.pts[i - 1][0] || p[1] !== m.pts[i - 1][1]);
-        if (pts.length >= 2) { sinGuardarDesfazer(); const el = { id: uid('el'), s: 'tubo', pts, eq: '' }; SinEd.pl.sinotico.elementos.push(el); SinEd.sel = el.id; SUP.alterado('sinotico'); }
+        if (pts.length >= 2) { sinGuardarDesfazer(); const el = { id: uid('el'), s: 'tubo', pts, eq: '', estilo: m.estilo || 'material', seta: ['processo', 'material'].includes(m.estilo) }; SinEd.pl.sinotico.elementos.push(el); SinEd.sel = el.id; SUP.alterado('sinotico'); }
     }
     sinRedesenhar(); atualizarBarraSinotico();
 }
 
 function sinAdicionar(s) {
     const pl = SinEd.pl, S = SIMBOLOS[s];
-    if (s === 'tubo') { SinEd.modoTubo = { pts: [] }; document.body.classList.add('sin-desenhando'); avisar('Clique para marcar os pontos do tubo; duplo clique (ou "Terminar tubo") para encerrar. Shift deixa a linha inclinada.', 'ok', 6000); atualizarBarraSinotico(); return; }
+    if (s === 'tubo') { SinEd.modoTubo = { pts: [], estilo: SinEd.estiloTubo || 'material' }; document.body.classList.add('sin-desenhando'); avisar('Tubulação (L): clique para marcar os pontos; duplo clique, Enter ou L de novo para encerrar. Shift deixa a linha inclinada.', 'ok', 6000); atualizarBarraSinotico(); return; }
     sinGuardarDesfazer();
     const palco = document.getElementById('sin-palco');
     const cx = (palco.scrollLeft + palco.clientWidth / 2) / SinEd.zoom, cy = (palco.scrollTop + palco.clientHeight / 2) / SinEd.zoom;
     const g = pl.sinotico.grade || 10;
-    const el = { id: uid('el'), s, x: naGrade(Math.max(10, cx - S.w / 2), g), y: naGrade(Math.max(20, cy - S.h / 2), g), w: S.w, h: S.h, rot: 0, rotulo: S.equip ? S.nome.split(' (')[0].split(' /')[0] : s === 'texto' ? 'Texto' : s === 'area' ? 'Área' : '', tags: [] };
-    // símbolo de equipamento cria o equipamento junto (pré-preenchido; a pessoa só renomeia)
-    if (S.equip) {
-        const n = pl.equipamentos.filter(e => e.simbolo === s).length + 1;
-        el.rotulo = `${el.rotulo} ${n}`;
-        const eq = criarEquipamento(el.rotulo, pl.areas[0] ? pl.areas[0].id : '', s);
-        pl.equipamentos.push(eq); el.eq = eq.id;
-    }
-    if (S.comando) { const c = pl.comandos.find(c => c.tipo === (s === 'chave' ? 'chave' : 'setpoint')); el.cmd = c ? c.id : ''; }
+    const el = { id: uid('el'), s, x: naGrade(Math.max(10, cx - S.w / 2), g), y: naGrade(Math.max(20, cy - S.h / 2), g), w: S.w, h: S.h, rot: 0, rotulo: S.equip ? nomeCurtoSimbolo(S) : s === 'texto' ? 'Texto' : s === 'area' ? 'Área' : '', tags: [] };
+    if (S.n) el.n = S.n;
+    if (S.instrumento) { el.codigo = 'TT'; el.numero = String(100 + pl.sinotico.elementos.filter(x => SIMBOLOS[x.s] && SIMBOLOS[x.s].instrumento).length + 1); }
+    // símbolo de equipamento, sensor ou botão já cria equipamento, variáveis e comandos com tópico base e unidade
+    const criados = aplicarKitSimbolo(pl, el, S);
     pl.sinotico.elementos.push(el); SinEd.sel = el.id;
     SUP.alterado('sinotico'); sinRedesenhar();
+    if (criados) avisar(`${criados} já com tópico pré-preenchido. Clique no símbolo para editar os tópicos.`, 'ok', 5000);
 }
 function sinAcao(acao) {
     const pl = SinEd.pl, el = pl.sinotico.elementos.find(x => x.id === SinEd.sel);
@@ -387,7 +401,13 @@ function htmlPropriedades(pl) {
             ${doEquip.length && pl.tags.length > doEquip.length ? '<small>Mostrando as variáveis deste equipamento.</small>' : ''}</fieldset>`;
         if (['silo', 'silo_pulmao', 'tanque', 'armazem'].includes(el.s)) h += `<label>Nível (preenchimento) <select data-sinp="tagNivel">${optsTag(el.tagNivel)}</select></label>`;
     }
-    if (S.valor) h += `<label>Variável <select data-sinp="tag">${optsTag(el.tag)}</select></label>`;
+    if (S.valor || S.sensor || S.instrumento || S.entrada) h += `<label>Variável <select data-sinp="tag">${optsTag(el.tag)}</select></label>`;
+    if (S.instrumento) h += `<div class="grade-mini"><label>Letras (ISA 5.1) <input type="text" value="${escAttr(el.codigo || '')}" data-sinp="codigo" maxlength="5" spellcheck="false"></label><label>Número <input type="text" value="${escAttr(el.numero || '')}" data-sinp="numero" maxlength="8"></label></div>
+        <small>1ª letra: T temperatura, P pressão, F vazão, L nível, W peso, M umidade, A análise, S velocidade, V vibração, J potência, E tensão, I corrente, Z posição. Seguintes: T transmissor, I indicador, C controlador, S chave, A alarme, V válvula.</small>`;
+    if (S.n && !(S.kit && S.kit.fixoN)) h += `<label>Número de saídas <input type="number" min="2" max="16" value="${nSaidas(el, S)}" data-sinp="n"></label>`;
+    if (el.s === 'tubo') h += `<label>Tipo de linha <select data-sinp="estilo">${Object.entries(ESTILOS_TUBO).map(([k, n]) => `<option value="${k}"${(el.estilo || 'material') === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+        <label class="check"><input type="checkbox" data-sinp="seta"${el.seta ? ' checked' : ''}> Seta no fim (sentido do fluxo)</label>`;
+    h += htmlTopicosElemento(pl, el, S);
     if (S.comando) h += `<label>Comando <select data-sinp="cmd"><option value="">—</option>${pl.comandos.map(c => `<option value="${c.id}"${c.id === el.cmd ? ' selected' : ''}>${esc(c.nome)} (${c.tipo})</option>`).join('')}</select></label>
         ${pl.comandos.length ? '' : '<p class="aviso-inline">Crie o comando em Controle → Comandos.</p>'}`;
     if (el.s !== 'tubo') h += `<div class="grade-mini"><label>Largura <input type="number" value="${el.w || S.w}" data-sinp="w"></label><label>Altura <input type="number" value="${el.h || S.h}" data-sinp="h"></label></div>`;
@@ -400,6 +420,9 @@ function sinMudarPropriedade(campo, valor) {
     const el = pl.sinotico.elementos.find(x => x.id === SinEd.sel); if (!el) return;
     sinGuardarDesfazer();
     if (campo === 'w' || campo === 'h') el[campo] = Math.max(10, num(valor, 50));
+    else if (campo === 'n') { el.n = Math.max(2, Math.min(16, num(valor, 2) | 0)); ajustarSaidasComando(pl, el); }
+    else if (campo === 'seta') el.seta = !!valor;
+    else if (campo === 'rotulo') { const antigo = el.rotulo; el.rotulo = valor; renomearPeloRotulo(pl, el, antigo, valor); }
     else el[campo] = valor;
     if (campo === 'eq' && valor && SIMBOLOS[el.s].equip && !lista(el.tags).length) el.tags = pl.tags.filter(t => t.equipId === valor).slice(0, 3).map(t => t.id);
     SUP.alterado('sinotico'); sinRedesenhar();
@@ -419,6 +442,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Delete' || e.key === 'Backspace') { sinAcao('excluir'); e.preventDefault(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { sinAcao(e.shiftKey ? 'refazer' : 'desfazer'); e.preventDefault(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { sinAcao('duplicar'); e.preventDefault(); }
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'l') { if (SinEd.modoTubo) sinTerminarTubo(); else sinAdicionar('tubo'); e.preventDefault(); }
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'r' && SinEd.sel) { sinAcao('girar'); e.preventDefault(); }
     else if (e.key === 'Escape' && SinEd.modoTubo) sinTerminarTubo();
     else if (e.key === 'Enter' && SinEd.modoTubo) sinTerminarTubo();
     else if (e.key.startsWith('Arrow') && SinEd.sel) {
@@ -429,3 +454,194 @@ document.addEventListener('keydown', e => {
         SUP.alterado('sinotico'); sinRedesenhar(); e.preventDefault();
     }
 });
+
+// ---------------------------------------------------------------- tubulações: tipos de linha (P&ID, ISA 5.1)
+const ESTILOS_TUBO = {
+    material: 'Material (grão) — tubo de queda / transporte',
+    ar: 'Ar — duto',
+    processo: 'P&ID — linha de processo',
+    pneumatico: 'P&ID — sinal pneumático (//)',
+    eletrico: 'P&ID — sinal elétrico (tracejado)',
+    dados: 'P&ID — ligação de dados / software (o-o)',
+    capilar: 'P&ID — tubo capilar (×)',
+    hidraulico: 'P&ID — sinal hidráulico (L)'
+};
+/** Marcas ao longo da linha (barras do pneumático, × do capilar, círculos de dados, L do hidráulico). */
+function marcasTubo(pts, estilo) {
+    if (!['pneumatico', 'capilar', 'dados', 'hidraulico'].includes(estilo)) return '';
+    let d = '', circ = '';
+    for (let i = 1; i < pts.length; i++) {
+        const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+        const L = Math.hypot(x1 - x0, y1 - y0); if (L < 20) continue;
+        const ux = (x1 - x0) / L, uy = (y1 - y0) / L, nx = -uy, ny = ux;
+        for (let s = 18; s < L - 8; s += 36) {
+            const cx = x0 + ux * s, cy = y0 + uy * s;
+            if (estilo === 'pneumatico') [-3, 3].forEach(o => { const bx = cx + ux * o, by = cy + uy * o; d += `M${(bx - nx * 6 - ux * 3).toFixed(1)} ${(by - ny * 6 - uy * 3).toFixed(1)} L${(bx + nx * 6 + ux * 3).toFixed(1)} ${(by + ny * 6 + uy * 3).toFixed(1)} `; });
+            if (estilo === 'capilar') d += `M${(cx - 5).toFixed(1)} ${(cy - 5).toFixed(1)} L${(cx + 5).toFixed(1)} ${(cy + 5).toFixed(1)} M${(cx + 5).toFixed(1)} ${(cy - 5).toFixed(1)} L${(cx - 5).toFixed(1)} ${(cy + 5).toFixed(1)} `;
+            if (estilo === 'hidraulico') d += `M${(cx - nx * 6).toFixed(1)} ${(cy - ny * 6).toFixed(1)} L${(cx + nx * 6).toFixed(1)} ${(cy + ny * 6).toFixed(1)} L${(cx + nx * 6 + ux * 6).toFixed(1)} ${(cy + ny * 6 + uy * 6).toFixed(1)} `;
+            if (estilo === 'dados') circ += `<circle class="tubo-marca-c" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="3"/>`;
+        }
+    }
+    return (d ? `<path class="tubo-marca" d="${d}"/>` : '') + circ;
+}
+
+// ---------------------------------------------------------------- kits: variáveis e comandos pré-preenchidos ao inserir
+function nomeCurtoSimbolo(S) { return S.nome.split(' (')[0].split(' / ')[0]; }
+/** Tópico base de um equipamento: "Elevador de canecas 2" → elevador_canecas_2 (o prefixo da planta entra na frente). */
+function baseTopico(nome) { return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'equipamento'; }
+
+/**
+ * Cria o que o símbolo precisa (equipamento, variáveis com tópico base e unidade, comandos, horímetro, potência) e liga
+ * ao elemento. Devolve um texto curto do que foi criado (ou '' se nada).
+ */
+function aplicarKitSimbolo(pl, el, S) {
+    const novasTags = [], novosCmds = [];
+    const contar = filtro => pl.sinotico.elementos.filter(x => SIMBOLOS[x.s] && filtro(SIMBOLOS[x.s], x)).length + 1;
+    // sensores avulsos: uma variável do tipo do sensor
+    if (S.sensor && !S.equip) {
+        const T = TIPOS_VAR[S.sensor] || TIPOS_VAR.generico;
+        const nome = `${S.nomeTag || T.nome} ${contar(Z => Z.sensor === S.sensor && (Z.nomeTag || '') === (S.nomeTag || ''))}`;
+        const t = criarTag({ nome, tipo: S.sensor, topico: `sensores/${baseTopico(nome)}`, unidade: S.un != null ? S.un : T.un, areaId: pl.areas[0] ? pl.areas[0].id : '' });
+        t.topicoAuto = true; t.kitS = 'sensor';
+        if (S.lim) t.limites = Object.assign(t.limites, { ativo: true }, S.lim);
+        pl.tags.push(t); novasTags.push(t); el.tag = t.id;
+    }
+    // entradas (emergência, sinaleiro)
+    if (S.entrada) {
+        const nome = `${S.entrada.nome} ${contar(Z => Z.entrada && Z.entrada.nome === S.entrada.nome)}`;
+        const t = criarTag({ nome, tipo: S.entrada.tipo, topico: `entradas/${baseTopico(nome)}` });
+        t.topicoAuto = true; t.kitS = 'entrada'; t.limites.semDadosS = 0;
+        if (S.entrada.lim) t.limites = Object.assign(t.limites, { ativo: true }, S.entrada.lim);
+        pl.tags.push(t); novasTags.push(t); el.tag = t.id; el.rotulo = nome;
+    }
+    // comandos avulsos (chave, setpoint, botoeira, botão, seletor)
+    if (S.comando && !S.equip) {
+        const tipo = S.comando === 'setpoint' ? 'setpoint' : S.comando === 'botao' ? 'botao' : 'chave';
+        const base = S.nomeCmd || (tipo === 'setpoint' ? 'Setpoint' : tipo === 'botao' ? 'Botão' : 'Comando');
+        const nome = `${base} ${contar(Z => Z.comando === S.comando && (Z.nomeCmd || '') === (S.nomeCmd || ''))}`;
+        const c = criarComando({ nome, tipo, topico: `comandos/${baseTopico(nome)}`, payloadLiga: S.payloads ? S.payloads[0] : '1', payloadDesliga: S.payloads ? S.payloads[1] : '0', retain: tipo !== 'botao', confirmar: true });
+        c.topicoAuto = true; c.kitS = 'comando';
+        pl.comandos.push(c); novosCmds.push(c); el.cmd = c.id; el.rotulo = nome;
+    }
+    // equipamento com kit
+    if (S.equip) {
+        const n = pl.equipamentos.filter(e => e.simbolo === el.s).length + 1;
+        el.rotulo = `${el.rotulo || nomeCurtoSimbolo(S)} ${n}`;
+        const eq = criarEquipamento(el.rotulo, pl.areas[0] ? pl.areas[0].id : '', el.s);
+        pl.equipamentos.push(eq); el.eq = eq.id;
+        const kit = S.kit || (S.sensor ? { tags: [{ s: 'valor', tipo: S.sensor, nome: S.nomeTag || TIPOS_VAR[S.sensor].nome }], mostrar: ['valor'] } : null);
+        if (kit) {
+            const base = baseTopico(eq.nome), porS = {};
+            (kit.tags || []).forEach(k => {
+                const T = TIPOS_VAR[k.tipo] || TIPOS_VAR.generico;
+                const t = criarTag({ nome: `${k.nome} — ${eq.nome}`, tipo: k.tipo, topico: `${base}/${k.s}`, unidade: k.un != null ? k.un : T.un, dec: k.dec, faixa: k.faixa, equipId: eq.id, areaId: eq.areaId });
+                t.topicoAuto = true; t.kitS = k.s;
+                if (k.lim) t.limites = Object.assign(t.limites, { ativo: true }, k.lim);
+                if (k.tipo === 'estado') t.limites.semDadosS = 0;
+                pl.tags.push(t); novasTags.push(t); porS[k.s] = t;
+            });
+            garantirVariaveis(pl);
+            if (kit.motor) {
+                const [iV, iC] = kit.motor, I = porS.corrente;
+                if (I) {
+                    I.faixa = [0, Math.ceil(iC * 1.6)];
+                    I.limites = Object.assign(I.limites, { ativo: true, h: +(iC * 1.15).toFixed(1), hh: +(iC * 1.3).toFixed(1), atrasoS: 10, histerese: +(iC * 0.03).toFixed(2) });
+                    const V = pl.tags.find(x => x.tipo === 'tensao' && x.origem === 'mqtt'), F = pl.tags.find(x => x.tipo === 'fp' && x.origem === 'mqtt');
+                    const P = criarTag({ nome: `Potência — ${eq.nome}`, tipo: 'potencia', origem: 'calc', expr: `pot_tri(${V ? V.variavel : 380}, ${I.variavel}, ${F ? F.variavel : 0.85})`, equipId: eq.id, areaId: eq.areaId, faixa: [0, Math.ceil(iC * 0.9)] });
+                    P.kitS = 'potencia'; pl.tags.push(P); novasTags.push(P); porS.potencia = P;
+                    Object.assign(eq.horimetro, { ativo: true, fonte: 'tag', tagId: I.id, limLigado: +(iV * 0.5).toFixed(2), limTrabalho: +((iV + iC) / 2).toFixed(2) });
+                    eq.tagPotencia = P.id;
+                }
+            }
+            (kit.calc || []).forEach(k => {
+                const expr = k.expr.replace(/\{(\w+)\}/g, (m, s) => (porS[s] ? porS[s].variavel : s));
+                const t = criarTag({ nome: `${k.nome} — ${eq.nome}`, tipo: k.tipo, origem: 'calc', expr, equipId: eq.id, areaId: eq.areaId });
+                t.kitS = k.s; pl.tags.push(t); novasTags.push(t); porS[k.s] = t;
+            });
+            (kit.cmds || []).forEach(k => {
+                const estado = porS.estado || porS.aberta;
+                const c = criarComando({ nome: `${k.nome} — ${eq.nome}`, tipo: k.tipo, topico: `${base}/${k.s}`, equipId: eq.id, payloadLiga: k.payloadLiga || '1', payloadDesliga: k.payloadDesliga || '0',
+                    tagEstado: k.tipo === 'chave' && estado ? estado.id : k.tipo === 'setpoint' ? '' : '', min: k.min != null ? k.min : 0, max: k.s === 'sp_saida' ? nSaidas(el, S) : (k.max != null ? k.max : 100),
+                    passo: k.passo || 1, unidade: k.unidade || '', retain: k.tipo !== 'botao', confirmar: true });
+                c.topicoAuto = true; c.kitS = k.s; pl.comandos.push(c); novosCmds.push(c);
+            });
+            if (kit.ajustarN && porS.saida) porS.saida.faixa = [1, nSaidas(el, S)];
+            el.tags = (kit.mostrar || []).map(s => porS[s] && porS[s].id).filter(Boolean);
+            if (kit.motor && porS.potencia && el.tags.length < 2) el.tags.push(porS.potencia.id);
+            if (kit.nivel && porS[kit.nivel]) el.tagNivel = porS[kit.nivel].id;
+        }
+    }
+    garantirVariaveis(pl);
+    const partes = [];
+    if (novasTags.length) partes.push(`${novasTags.length} variável(is)`);
+    if (novosCmds.length) partes.push(`${novosCmds.length} comando(s)`);
+    return partes.length ? partes.join(' e ') + ' criado(s)' : '';
+}
+/** Ao mudar o número de saídas, a faixa do setpoint "Escolher saída" acompanha. */
+function ajustarSaidasComando(pl, el) {
+    if (!el.eq) return;
+    pl.comandos.filter(c => c.equipId === el.eq && c.kitS === 'sp_saida').forEach(c => { c.max = el.n; });
+    pl.tags.filter(t => t.equipId === el.eq && t.kitS === 'saida').forEach(t => { t.faixa = [1, el.n]; });
+}
+/** Renomear o símbolo renomeia o equipamento e atualiza os tópicos que ainda são os automáticos. */
+function renomearPeloRotulo(pl, el, antigo, novo) {
+    novo = String(novo || '').trim();
+    if (!novo) return;
+    const troca = (txt, de, para) => (de && txt.includes(de) ? txt.split(de).join(para) : txt);
+    if (el.eq) {
+        const eq = SUP.equipamento(el.eq);
+        if (!eq) return;
+        const velho = eq.nome; eq.nome = novo;
+        const base = baseTopico(novo);
+        pl.tags.filter(t => t.equipId === eq.id).forEach(t => { t.nome = troca(t.nome, velho, novo); if (t.topicoAuto && t.kitS) t.topico = `${base}/${t.kitS}`; });
+        pl.comandos.filter(c => c.equipId === eq.id).forEach(c => { c.nome = troca(c.nome, velho, novo); if (c.topicoAuto && c.kitS) c.topico = `${base}/${c.kitS}`; });
+        return;
+    }
+    const t = el.tag && SUP.tag(el.tag);
+    if (t && (t.kitS === 'entrada' || t.kitS === 'sensor')) { t.nome = novo; if (t.topicoAuto) t.topico = `${t.kitS === 'entrada' ? 'entradas' : 'sensores'}/${baseTopico(novo)}`; }
+    const c = el.cmd && pl.comandos.find(x => x.id === el.cmd);
+    if (c && c.kitS === 'comando') { c.nome = novo; if (c.topicoAuto) c.topico = `comandos/${baseTopico(novo)}`; }
+    void antigo;
+}
+/** Painel "Tópicos" do símbolo selecionado: edita tópico, unidade e mensagens direto no desenho. */
+function htmlTopicosElemento(pl, el, S) {
+    const tags = el.eq ? pl.tags.filter(t => t.equipId === el.eq) : el.tag ? pl.tags.filter(t => t.id === el.tag) : [];
+    const cmds = el.eq ? pl.comandos.filter(c => c.equipId === el.eq) : el.cmd ? pl.comandos.filter(c => c.id === el.cmd) : [];
+    if (!tags.length && !cmds.length) return '';
+    const pre = String(pl.conexao.prefixo || '').replace(/\/+$/, '');
+    return `<fieldset class="sin-topicos"><legend>Tópicos MQTT ${pre ? `<small>(prefixo ${esc(pre)}/)</small>` : ''}</legend>
+        ${tags.map(t => `<div class="sin-top-linha"><span class="sin-top-nome">${icone(t.tipo)} ${esc(t.nome.replace(/ — .*$/, ''))}${t.origem === 'calc' ? ' <small>(equação)</small>' : ''}</span>
+            <input type="text" class="sin-top-un" data-ref="tag:${t.id}.unidade" value="${escAttr(t.unidade)}" aria-label="Unidade" title="Unidade">
+            ${t.origem === 'mqtt' ? `<input type="text" class="sin-top-topico" data-ref="tag:${t.id}.topico" value="${escAttr(t.topico)}" spellcheck="false" title="${escAttr(topicoCompleto(pl, t.topico))}" aria-label="Tópico de ${escAttr(t.nome)}">` : t.origem === 'calc' ? `<input type="text" class="sin-top-topico" data-ref="tag:${t.id}.expr" data-expr-pl="${pl.id}" value="${escAttr(t.expr)}" spellcheck="false" aria-label="Equação"><small class="expr-conf"></small>` : ''}</div>`).join('')}
+        ${cmds.map(c => `<div class="sin-top-linha cmd"><span class="sin-top-nome">${icone(c.tipo === 'chave' ? 'estado' : c.tipo === 'setpoint' ? 'percentual' : 'play')} ${esc(c.nome.replace(/ — .*$/, ''))} <small>(${c.tipo === 'chave' ? 'liga/desliga' : c.tipo})</small></span>
+            <input type="text" data-ref="cmd:${c.id}.topico" value="${escAttr(c.topico)}" spellcheck="false" aria-label="Tópico do comando">
+            ${c.tipo === 'chave' ? `<span class="sin-top-payloads"><input type="text" data-ref="cmd:${c.id}.payloadLiga" value="${escAttr(c.payloadLiga)}" title="Mensagem para ligar"><input type="text" data-ref="cmd:${c.id}.payloadDesliga" value="${escAttr(c.payloadDesliga)}" title="Mensagem para desligar"></span>`
+                : c.tipo === 'setpoint' ? `<span class="sin-top-payloads"><input type="number" step="any" data-ref="cmd:${c.id}.min" value="${c.min}" title="Mínimo"><input type="number" step="any" data-ref="cmd:${c.id}.max" value="${c.max}" title="Máximo"></span>`
+                : `<span class="sin-top-payloads"><input type="text" data-ref="cmd:${c.id}.payloadLiga" value="${escAttr(c.payloadLiga)}" title="Mensagem"></span>`}</div>`).join('')}
+        <small>Os tópicos vêm prontos (equipamento/grandeza); mude se o campo usar outro. Renomear o símbolo atualiza os tópicos que ainda não foram editados.</small>
+        <a class="btn-link" href="#/configurar/${pl.id}">Mais opções da variável (limites, escala, JSON) em Configurar</a></fieldset>`;
+}
+
+// ---------------------------------------------------------------- faceplate (clique no equipamento em operação)
+function abrirFaceplate(pl, eqId) {
+    const eq = SUP.equipamento(eqId); if (!eq) return;
+    document.querySelectorAll('.faceplate-fundo').forEach(f => f.remove());
+    const tags = pl.tags.filter(t => t.equipId === eq.id), cmds = pl.comandos.filter(c => c.equipId === eq.id);
+    const fundo = document.createElement('div');
+    fundo.className = 'janela-fundo faceplate-fundo';
+    fundo.innerHTML = `<div class="janela faceplate" role="dialog" aria-modal="true" aria-label="${escAttr(eq.nome)}">
+        <div class="card-topo"><h2>${esc(eq.nome)}</h2>${chipEstadoEquip(eq)}<button type="button" class="btn-icone" data-fp="fechar" aria-label="Fechar">×</button></div>
+        ${cmds.length ? `<div class="cmds">${cmds.map(c => botaoComando(pl, c)).join('')}</div>` : ''}
+        ${tags.length ? `<div class="grade-vars">${tags.map(t => cartaoVar(pl, t)).join('')}</div>` : '<p class="nota">Este equipamento ainda não tem variáveis.</p>'}
+        <div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-fp="grafico">${icone('graficos')} Gráfico das variáveis</button><a class="btn btn-secondary btn-sm" href="#/configurar/${pl.id}">${icone('configurar')} Configurar</a></div></div>`;
+    document.body.appendChild(fundo);
+    const atualizar = () => { if (!document.body.contains(fundo)) { clearInterval(tm); return; } atualizarCartoes(fundo, new Set(), true); };
+    const tm = setInterval(atualizar, 1000); atualizar();
+    const fechar = () => { clearInterval(tm); fundo.remove(); };
+    fundo.addEventListener('click', e => {
+        if (e.target === fundo || e.target.closest('[data-fp="fechar"]')) fechar();
+        else if (e.target.closest('[data-fp="grafico"]')) { GRAF.sel = tags.filter(t => t.tipo !== 'estado').slice(0, 6).map(t => t.id); GRAF.aoVivo = true; guardarGraf(); fechar(); location.hash = '#/graficos'; }
+        else if (e.target.closest('a, .cartao-var')) setTimeout(fechar, 0);
+    });
+    document.addEventListener('keydown', function esc_(e) { if (e.key === 'Escape') { fechar(); document.removeEventListener('keydown', esc_); } });
+}
