@@ -244,6 +244,7 @@ function variaveisConhecidas(pl) {
 /** Recompila tudo que depende da configuração. Chamado ao iniciar e a cada alteração. */
 function prepararPlanta(pl) {
     garantirVariaveis(pl);
+    if (typeof atualizarTopicosAuto === 'function') atualizarTopicosAuto(pl);   // área/elemento/grandeza acompanham os nomes
     const mapa = new Map();
     pl.tags.filter(t => t.origem === 'mqtt' && t.topico).forEach(t => { const k = topicoCompleto(pl, t.topico); (mapa.get(k) || mapa.set(k, []).get(k)).push(t); });
     RT.topicos.set(pl.id, mapa);

@@ -88,13 +88,14 @@ function svgElemento(pl, el, editando) {
     const S = SIMBOLOS[el.s];
     if (!S) return '';
     if (el.s === 'tubo') {
-        const pts = lista(el.pts);
-        if (pts.length < 2) return '';
+        const pts = pontosTubo(pl, el);
+        if (!pts || pts.length < 2) return '';
         const d = 'M' + pts.map(p => `${p[0]} ${p[1]}`).join(' L');
-        const estilo = ESTILOS_TUBO[el.estilo] ? el.estilo : 'material';
+        const estilo = el.tipo && TIPOS_PORTA[el.tipo] ? TIPOS_PORTA[el.tipo].estilo : ESTILOS_TUBO[el.estilo] ? el.estilo : 'material';
+        const alcas = el.de ? lista(el.meio).map((p, i) => `<circle class="sin-ponto" data-meio="${i}" cx="${p[0]}" cy="${p[1]}" r="6"/>`).join('') : pts.map((p, i) => `<circle class="sin-ponto" data-ponto="${i}" cx="${p[0]}" cy="${p[1]}" r="6"/>`).join('');
         return `<g class="sin-el sin-tubo tubo-${estilo}${el.eq ? '' : ' sem-eq'}" data-id="${el.id}" ${el.eq ? `data-eq="${el.eq}"` : ''}>
             <path class="tubo-fundo" d="${d}"/><path class="tubo-linha" d="${d}"${el.seta ? ' marker-end="url(#sin-seta)"' : ''}/><path class="tubo-fluxo" d="${d}"/>${marcasTubo(pts, estilo)}
-            ${editando ? `<path class="tubo-toque" d="${d}"/>` + pts.map((p, i) => `<circle class="sin-ponto" data-ponto="${i}" cx="${p[0]}" cy="${p[1]}" r="6"/>`).join('') : ''}
+            ${editando ? `<path class="tubo-toque" d="${d}"/>` + alcas : ''}
         </g>`;
     }
     const w = el.w || S.w, h = el.h || S.h;
@@ -137,7 +138,7 @@ function svgElemento(pl, el, editando) {
     }
     const eqAttr = el.eq ? ` data-eq="${el.eq}"` : '';
     const handles = editando ? `<rect class="sin-sel-caixa" x="-4" y="-4" width="${w + 8}" height="${h + 8}"/><rect class="sin-alca" data-alca="1" x="${w - 3}" y="${h - 3}" width="12" height="12"/>` : '';
-    return `<g class="sin-el sin-${el.s}" data-id="${el.id}"${eqAttr} transform="${tr}">${corpo}${handles}<rect class="sin-toque" x="0" y="0" width="${w}" height="${h}"/></g>`;
+    return `<g class="sin-el sin-${el.s}" data-id="${el.id}"${eqAttr} transform="${tr}">${corpo}${handles}<rect class="sin-toque" x="0" y="0" width="${w}" height="${h}"/>${editando ? svgPortas(el) : ''}</g>`;
 }
 /** Nome curto para caber no sinótico: "Temperatura da massa de grãos" → "T. massa grãos"; tira o nome do equipamento. */
 function abreviarNome(tg, el) {
@@ -274,20 +275,16 @@ function sinEventos(svg) {
             const palco = svg.parentElement; arr = { tipo: 'rolar', cx: e.clientX, cy: e.clientY, sl: palco.scrollLeft, st: palco.scrollTop };
             svg.setPointerCapture(e.pointerId); return;
         }
-        if (SinEd.modoTubo) {
-            const pts = SinEd.modoTubo.pts;
-            pts.push([naGrade(p.x, g), naGrade(p.y, g)]);
-            if (pts.length === 1) pts.push([naGrade(p.x, g), naGrade(p.y, g)]);
-            sinDesenharTuboTemp(svg); return;
-        }
+        if (SinEd.modoTubo) { cliqueTubulacao(svg, e, p, g); return; }
         if (!alvo) { SinEd.sel = null; sinRedesenhar(); return; }
         const el = pl.sinotico.elementos.find(x => x.id === alvo.dataset.id);
         if (!el) return;
         if (SinEd.sel !== el.id) { SinEd.sel = el.id; sinRedesenhar(); }
         const svg2 = document.querySelector('#sin-palco svg');
         sinGuardarDesfazer();
-        const ponto = e.target.dataset && e.target.dataset.ponto;
-        arr = { el, p, x: el.x, y: el.y, w: el.w || SIMBOLOS[el.s].w, h: el.h || SIMBOLOS[el.s].h, alca: !!(e.target.dataset && e.target.dataset.alca), ponto: ponto != null ? +ponto : null, pts: el.pts ? clonar(el.pts) : null, svg: svg2, moveu: false };
+        const ponto = e.target.dataset && e.target.dataset.ponto, meio = e.target.dataset && e.target.dataset.meio;
+        arr = { el, p, x: el.x, y: el.y, w: el.w || SIMBOLOS[el.s].w, h: el.h || SIMBOLOS[el.s].h, alca: !!(e.target.dataset && e.target.dataset.alca), ponto: ponto != null ? +ponto : null, meio: meio != null ? +meio : null,
+            pts: el.pts ? clonar(el.pts) : null, meios: el.meio ? clonar(el.meio) : null, svg: svg2, moveu: false };
         svg2.setPointerCapture(e.pointerId);
         svg2.addEventListener('pointermove', mover); svg2.addEventListener('pointerup', soltar, { once: true });
     });
@@ -296,13 +293,21 @@ function sinEventos(svg) {
         const p = pontoSvg(arr.svg, e), dx = p.x - arr.p.x, dy = p.y - arr.p.y;
         const el = arr.el;
         if (Math.abs(dx) + Math.abs(dy) > 2) arr.moveu = true;
-        if (el.s === 'tubo') {
+        if (el.s === 'tubo' && el.de) {
+            if (arr.meio != null) el.meio[arr.meio] = [naGrade(arr.meios[arr.meio][0] + dx, g), naGrade(arr.meios[arr.meio][1] + dy, g)];
+            else if (arr.meios && arr.meios.length) el.meio = arr.meios.map(q => [naGrade(q[0] + dx, g), naGrade(q[1] + dy, g)]);
+        } else if (el.s === 'tubo') {
             if (arr.ponto != null) el.pts[arr.ponto] = [naGrade(arr.pts[arr.ponto][0] + dx, g), naGrade(arr.pts[arr.ponto][1] + dy, g)];
             else el.pts = arr.pts.map(q => [naGrade(q[0] + dx, g), naGrade(q[1] + dy, g)]);
         } else if (arr.alca) { el.w = Math.max(20, naGrade(arr.w + dx, g)); el.h = Math.max(16, naGrade(arr.h + dy, g)); }
         else { el.x = naGrade(arr.x + dx, g); el.y = naGrade(arr.y + dy, g); }
         const gEl = arr.svg.querySelector(`.sin-el[data-id="${el.id}"]`);
-        if (gEl) { gEl.outerHTML = svgElemento(pl, el, true); const n = arr.svg.querySelector(`.sin-el[data-id="${el.id}"]`); n.classList.add('selecionado'); atualizarSinotico(arr.svg, pl); }
+        if (gEl) {
+            gEl.outerHTML = svgElemento(pl, el, true); const n = arr.svg.querySelector(`.sin-el[data-id="${el.id}"]`); n.classList.add('selecionado');
+            // as ligações presas a este símbolo vão junto
+            pl.sinotico.elementos.filter(t => t.s === 'tubo' && t.de && (t.de.el === el.id || t.para.el === el.id)).forEach(t => { const gt = arr.svg.querySelector(`.sin-el[data-id="${t.id}"]`); if (gt) gt.outerHTML = svgElemento(pl, t, true); });
+            atualizarSinotico(arr.svg, pl);
+        }
     };
     const soltar = () => {
         if (arr && arr.svg) arr.svg.removeEventListener('pointermove', mover);
@@ -312,15 +317,10 @@ function sinEventos(svg) {
     };
     svg.addEventListener('pointermove', e => {
         if (arr && arr.tipo === 'rolar') { const palco = svg.parentElement; palco.scrollLeft = arr.sl - (e.clientX - arr.cx); palco.scrollTop = arr.st - (e.clientY - arr.cy); return; }
-        if (SinEd.modoTubo && SinEd.modoTubo.pts.length) {
-            const p = pontoSvg(svg, e), pts = SinEd.modoTubo.pts, ant = pts[pts.length - 2];
-            let x = naGrade(p.x, g), y = naGrade(p.y, g);
-            if (ant && !e.shiftKey) { if (Math.abs(x - ant[0]) > Math.abs(y - ant[1])) y = ant[1]; else x = ant[0]; }   // ortogonal (Shift livre)
-            pts[pts.length - 1] = [x, y]; sinDesenharTuboTemp(svg);
-        }
+        if (SinEd.modoTubo && SinEd.modoTubo.de) previaTubulacao(svg, pontoSvg(svg, e), g, e.shiftKey);
     });
     svg.addEventListener('pointerup', () => { if (arr && arr.tipo === 'rolar') arr = null; });
-    svg.addEventListener('dblclick', () => { if (SinEd.modoTubo) sinTerminarTubo(); });
+
     // balão com o histórico ao passar o mouse nos valores
     svg.addEventListener('pointerover', e => {
         const n = e.target.closest('[data-tag], .sin-valor, .sin-sensor');
@@ -331,38 +331,127 @@ function sinEventos(svg) {
     });
     svg.addEventListener('pointerout', e => { if (e.target.closest('[data-tag], .sin-valor, .sin-sensor')) esconderBalaoTag(); });
 }
-function sinDesenharTuboTemp(svg) {
+/** Porta sob o clique: { el, porta } ou null. */
+function portaDoAlvo(pl, alvo) {
+    const gp = alvo && alvo.closest && alvo.closest('[data-porta]');
+    if (!gp) return null;
+    const ge = gp.closest('.sin-el'), el = ge && pl.sinotico.elementos.find(x => x.id === ge.dataset.id);
+    if (!el) return null;
+    const porta = portasDoElemento(el).find(p => p.id === gp.dataset.porta);
+    return porta ? { el, porta, g: portaGlobal(el, porta) } : null;
+}
+/** Tubulação (L): 1º clique numa SAÍDA; cliques no vazio fazem curvas; termina só numa ENTRADA do mesmo tipo. */
+function cliqueTubulacao(svg, e, p, g) {
+    const pl = SinEd.pl, m = SinEd.modoTubo, alvo = portaDoAlvo(pl, e.target);
+    if (!m.de) {
+        if (!alvo) { avisar('Comece a tubulação numa SAÍDA (forma cheia) de um símbolo.', 'erro', 4000); return; }
+        if (alvo.porta.io !== 's') { avisar(`Isto é uma entrada (${TIPOS_PORTA[alvo.porta.tipo].nome}). A tubulação começa numa saída (forma cheia).`, 'erro', 5000); return; }
+        m.de = { el: alvo.el.id, p: alvo.porta.id }; m.tipo = alvo.porta.tipo; m.meio = [];
+        svg.classList.add('ligando'); svg.dataset.ligando = m.tipo;
+        svg.querySelectorAll('.porta').forEach(n => n.classList.toggle('alvo-valido', n.dataset.io === 'e' && n.dataset.tipo === m.tipo && n.closest('.sin-el').dataset.id !== alvo.el.id));
+        avisar(`Saída de ${TIPOS_PORTA[m.tipo].nome.toLowerCase()}: clique no vazio para fazer curvas e termine numa entrada do mesmo tipo (destacadas). L ou Esc cancela.`, 'ok', 7000);
+        return;
+    }
+    if (alvo) {
+        if (alvo.porta.io !== 'e') { avisar('Termine numa ENTRADA (forma vazada).', 'erro', 4000); return; }
+        if (alvo.porta.tipo !== m.tipo) { avisar(`Tipos diferentes: a saída é de ${TIPOS_PORTA[m.tipo].nome.toLowerCase()} e esta entrada é de ${TIPOS_PORTA[alvo.porta.tipo].nome.toLowerCase()}.`, 'erro', 6000); return; }
+        if (alvo.el.id === m.de.el) { avisar('Ligue a outro símbolo (não à entrada do próprio).', 'erro', 4000); return; }
+        sinGuardarDesfazer();
+        const el = { id: uid('el'), s: 'tubo', de: m.de, para: { el: alvo.el.id, p: alvo.porta.id }, meio: m.meio, tipo: m.tipo, estilo: TIPOS_PORTA[m.tipo].estilo, seta: true, eq: '' };
+        // a animação do fluxo acompanha o equipamento de onde sai a linha
+        const origem = pl.sinotico.elementos.find(x => x.id === m.de.el); if (origem && origem.eq) el.eq = origem.eq;
+        pl.sinotico.elementos.push(el);
+        SinEd.modoTubo = null; SinEd.sel = el.id; document.body.classList.remove('sin-desenhando');
+        SUP.alterado('sinotico'); sinRedesenhar(); atualizarBarraSinotico();
+        avisar('Ligação feita. Arraste os pontos para mudar o caminho; mover o símbolo leva a linha junto.', 'ok', 4000);
+        return;
+    }
+    // curva no vazio (ortogonal ao último trecho; Shift livre)
+    const de = acharPorta(pl, m.de), ult = m.meio.length ? m.meio[m.meio.length - 1] : [de.x + de.dx * AFASTA, de.y + de.dy * AFASTA];
+    let x = naGrade(p.x, g), y = naGrade(p.y, g);
+    if (!e.shiftKey) { if (Math.abs(x - ult[0]) > Math.abs(y - ult[1])) y = ult[1]; else x = ult[0]; }
+    m.meio.push([x, y]);
+    previaTubulacao(svg, p, g, e.shiftKey);
+}
+function previaTubulacao(svg, p, g, livre) {
+    const pl = SinEd.pl, m = SinEd.modoTubo, de = acharPorta(pl, m.de);
+    if (!de) return;
     let t = svg.querySelector('.tubo-temp');
     if (!t) { t = document.createElementNS('http://www.w3.org/2000/svg', 'path'); t.setAttribute('class', 'tubo-temp'); svg.appendChild(t); }
-    const pts = SinEd.modoTubo.pts;
-    t.setAttribute('d', 'M' + pts.map(p => p.join(' ')).join(' L'));
+    const a = [de.x + de.dx * AFASTA, de.y + de.dy * AFASTA];
+    const pts = [[de.x, de.y], a, ...m.meio];
+    const ult = pts[pts.length - 1];
+    let x = naGrade(p.x, g), y = naGrade(p.y, g);
+    if (!livre) { if (Math.abs(x - ult[0]) > Math.abs(y - ult[1])) y = ult[1]; else x = ult[0]; }
+    pts.push([x, y]);
+    t.setAttribute('d', 'M' + pts.map(q => q.join(' ')).join(' L'));
+    t.setAttribute('data-tipo', m.tipo);
 }
-function sinTerminarTubo() {
+function sinTerminarTubo() { cancelarTubulacao(); }
+function cancelarTubulacao(msg = true) {
     const m = SinEd.modoTubo; SinEd.modoTubo = null;
     document.body.classList.remove('sin-desenhando');
-    if (m && m.pts.length >= 3) {
-        m.pts.pop();
-        const pts = m.pts.filter((p, i) => i === 0 || p[0] !== m.pts[i - 1][0] || p[1] !== m.pts[i - 1][1]);
-        if (pts.length >= 2) { sinGuardarDesfazer(); const el = { id: uid('el'), s: 'tubo', pts, eq: '', estilo: m.estilo || 'material', seta: ['processo', 'material'].includes(m.estilo) }; SinEd.pl.sinotico.elementos.push(el); SinEd.sel = el.id; SUP.alterado('sinotico'); }
-    }
+    if (m && m.de && msg) avisar('Tubulação cancelada: ela precisa terminar numa entrada do mesmo tipo.', 'erro', 4500);
     sinRedesenhar(); atualizarBarraSinotico();
 }
+/** Remove ligações cujas portas sumiram (símbolo excluído ou menos saídas). */
+function limparLigacoes(pl) {
+    const antes = pl.sinotico.elementos.length;
+    pl.sinotico.elementos = pl.sinotico.elementos.filter(t => t.s !== 'tubo' || !t.de || (acharPorta(pl, t.de) && acharPorta(pl, t.para)));
+    return antes - pl.sinotico.elementos.length;
+}
 
-function sinAdicionar(s) {
+async function sinAdicionar(s, eqAlvo = null) {
     const pl = SinEd.pl, S = SIMBOLOS[s];
-    if (s === 'tubo') { SinEd.modoTubo = { pts: [], estilo: SinEd.estiloTubo || 'material' }; document.body.classList.add('sin-desenhando'); avisar('Tubulação (L): clique para marcar os pontos; duplo clique, Enter ou L de novo para encerrar. Shift deixa a linha inclinada.', 'ok', 6000); atualizarBarraSinotico(); return; }
+    if (s === 'tubo') { SinEd.modoTubo = { de: null, meio: [] }; SinEd.sel = null; document.body.classList.add('sin-desenhando'); sinRedesenhar(); avisar('Tubulação (L): clique numa SAÍDA (forma cheia) de um símbolo.', 'ok', 6000); atualizarBarraSinotico(); return; }
+    // sensor é sempre de algum elemento: usa o selecionado ou pergunta
+    let elAlvo = null;
+    if (S.sensor && !S.equip) {
+        const sel = pl.sinotico.elementos.find(x => x.id === SinEd.sel);
+        if (!eqAlvo && sel && sel.eq && SIMBOLOS[sel.s] && SIMBOLOS[sel.s].equip) eqAlvo = sel.eq;
+        if (!eqAlvo) {
+            if (!pl.equipamentos.length) { avisar('Coloque primeiro o elemento (silo, motor, secador…): o sensor é sempre de um elemento.', 'erro', 6000); return; }
+            eqAlvo = await escolherElemento(pl, S.nome);
+            if (!eqAlvo) return;
+        }
+        elAlvo = pl.sinotico.elementos.find(x => x.eq === eqAlvo && SIMBOLOS[x.s] && SIMBOLOS[x.s].equip);
+    }
     sinGuardarDesfazer();
     const palco = document.getElementById('sin-palco');
     const cx = (palco.scrollLeft + palco.clientWidth / 2) / SinEd.zoom, cy = (palco.scrollTop + palco.clientHeight / 2) / SinEd.zoom;
     const g = pl.sinotico.grade || 10;
     const el = { id: uid('el'), s, x: naGrade(Math.max(10, cx - S.w / 2), g), y: naGrade(Math.max(20, cy - S.h / 2), g), w: S.w, h: S.h, rot: 0, rotulo: S.equip ? nomeCurtoSimbolo(S) : s === 'texto' ? 'Texto' : s === 'area' ? 'Área' : '', tags: [] };
     if (S.n) el.n = S.n;
+    if (eqAlvo) {
+        el._eqAlvo = eqAlvo;
+        if (elAlvo) {   // ao lado do elemento, sem cobrir os outros sensores dele
+            const ja = pl.sinotico.elementos.filter(x => x.eq === eqAlvo && SIMBOLOS[x.s] && SIMBOLOS[x.s].sensor).length;
+            el.x = naGrade(elAlvo.x + (elAlvo.w || SIMBOLOS[elAlvo.s].w) + 14, g); el.y = naGrade(elAlvo.y + ja * (S.h + 22), g);
+        }
+    }
     if (S.instrumento) { el.codigo = 'TT'; el.numero = String(100 + pl.sinotico.elementos.filter(x => SIMBOLOS[x.s] && SIMBOLOS[x.s].instrumento).length + 1); }
     // símbolo de equipamento, sensor ou botão já cria equipamento, variáveis e comandos com tópico base e unidade
     const criados = aplicarKitSimbolo(pl, el, S);
     pl.sinotico.elementos.push(el); SinEd.sel = el.id;
     SUP.alterado('sinotico'); sinRedesenhar();
     if (criados) avisar(`${criados} já com tópico pré-preenchido. Clique no símbolo para editar os tópicos.`, 'ok', 5000);
+}
+/** Pergunta a qual elemento o sensor pertence (lista os equipamentos por área). */
+function escolherElemento(pl, oQue) {
+    return new Promise(resolve => {
+        const fundo = document.createElement('div');
+        fundo.className = 'janela-fundo';
+        const porArea = [...pl.areas, { id: '', nome: 'Sem área' }].map(a => [a, pl.equipamentos.filter(e => (e.areaId || '') === a.id)]).filter(([, l]) => l.length);
+        fundo.innerHTML = `<form class="janela janela-pequena"><h2>${esc(oQue)}: de qual elemento?</h2>
+            <p class="nota">O sensor fica preso ao elemento e o tópico é montado como área/elemento/sensor. Dica: selecione o elemento no desenho antes de inserir o sensor.</p>
+            <label>Elemento <select name="eq" required>${porArea.map(([a, l]) => `<optgroup label="${escAttr(a.nome)}">${l.map(e => `<option value="${e.id}">${esc(e.nome)}</option>`).join('')}</optgroup>`).join('')}</select></label>
+            <div class="janela-rodape"><button type="button" class="btn btn-secondary" data-n="nao">Cancelar</button><button type="submit" class="btn btn-primary">Inserir sensor</button></div></form>`;
+        document.body.appendChild(fundo);
+        const f = fundo.querySelector('form'); f.eq.focus();
+        const fim = v => { fundo.remove(); resolve(v); };
+        fundo.querySelector('[data-n=nao]').onclick = () => fim(null);
+        f.onsubmit = e => { e.preventDefault(); fim(f.eq.value); };
+    });
 }
 function sinAcao(acao) {
     const pl = SinEd.pl, el = pl.sinotico.elementos.find(x => x.id === SinEd.sel);
@@ -374,7 +463,8 @@ function sinAcao(acao) {
     if (acao === 'zoom-ajustar') { const palco = document.getElementById('sin-palco'); SinEd.zoom = Math.max(0.25, Math.min(2, (palco.clientWidth - 4) / pl.sinotico.largura)); return sinRedesenhar(); }
     if (!el) return;
     sinGuardarDesfazer();
-    if (acao === 'excluir') { pl.sinotico.elementos = pl.sinotico.elementos.filter(x => x !== el); SinEd.sel = null; }
+    if (acao === 'excluir') { pl.sinotico.elementos = pl.sinotico.elementos.filter(x => x !== el); SinEd.sel = null; limparLigacoes(pl); }
+    if (acao === 'caminho-auto' && el.s === 'tubo') el.meio = [];
     if (acao === 'duplicar') { const c = clonar(el); c.id = uid('el'); if (c.pts) c.pts = c.pts.map(p => [p[0] + 20, p[1] + 20]); else { c.x += 20; c.y += 20; } pl.sinotico.elementos.push(c); SinEd.sel = c.id; }
     if (acao === 'girar' && el.s !== 'tubo') el.rot = ((el.rot || 0) + 90) % 360;
     if (acao === 'frente') { pl.sinotico.elementos = pl.sinotico.elementos.filter(x => x !== el).concat([el]); }
@@ -401,11 +491,17 @@ function htmlPropriedades(pl) {
             ${doEquip.length && pl.tags.length > doEquip.length ? '<small>Mostrando as variáveis deste equipamento.</small>' : ''}</fieldset>`;
         if (['silo', 'silo_pulmao', 'tanque', 'armazem'].includes(el.s)) h += `<label>Nível (preenchimento) <select data-sinp="tagNivel">${optsTag(el.tagNivel)}</select></label>`;
     }
+    if (S.sensor && !S.equip) h += `<label>Elemento do sensor <small>(obrigatório; o tópico é área/elemento/sensor)</small><select data-sinp="eqSensor">${pl.equipamentos.map(e => `<option value="${e.id}"${e.id === el.eq ? ' selected' : ''}>${esc(e.nome)}</option>`).join('')}${el.eq ? '' : '<option value="" selected>— escolha —</option>'}</select></label>`;
     if (S.valor || S.sensor || S.instrumento || S.entrada) h += `<label>Variável <select data-sinp="tag">${optsTag(el.tag)}</select></label>`;
     if (S.instrumento) h += `<div class="grade-mini"><label>Letras (ISA 5.1) <input type="text" value="${escAttr(el.codigo || '')}" data-sinp="codigo" maxlength="5" spellcheck="false"></label><label>Número <input type="text" value="${escAttr(el.numero || '')}" data-sinp="numero" maxlength="8"></label></div>
         <small>1ª letra: T temperatura, P pressão, F vazão, L nível, W peso, M umidade, A análise, S velocidade, V vibração, J potência, E tensão, I corrente, Z posição. Seguintes: T transmissor, I indicador, C controlador, S chave, A alarme, V válvula.</small>`;
     if (S.n && !(S.kit && S.kit.fixoN)) h += `<label>Número de saídas <input type="number" min="2" max="16" value="${nSaidas(el, S)}" data-sinp="n"></label>`;
-    if (el.s === 'tubo') h += `<label>Tipo de linha <select data-sinp="estilo">${Object.entries(ESTILOS_TUBO).map(([k, n]) => `<option value="${k}"${(el.estilo || 'material') === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+    if (el.s === 'tubo' && el.de) {
+        const ori = pl.sinotico.elementos.find(x => x.id === el.de.el), dst = pl.sinotico.elementos.find(x => x.id === el.para.el);
+        h += `<p class="nota">${esc(TIPOS_PORTA[el.tipo] ? TIPOS_PORTA[el.tipo].nome : '')}: de <b>${esc((ori && (ori.rotulo || SIMBOLOS[ori.s].nome)) || '?')}</b> para <b>${esc((dst && (dst.rotulo || SIMBOLOS[dst.s].nome)) || '?')}</b>. O tipo vem das portas.</p>
+            <label class="check"><input type="checkbox" data-sinp="seta"${el.seta ? ' checked' : ''}> Seta no fim (sentido do fluxo)</label>
+            <div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-sin="caminho-auto">Refazer o caminho automático</button></div>`;
+    } else if (el.s === 'tubo') h += `<p class="aviso-inline">Linha solta (desenho antigo): não está presa a portas.</p><label>Tipo de linha <select data-sinp="estilo">${Object.entries(ESTILOS_TUBO).map(([k, n]) => `<option value="${k}"${(el.estilo || 'material') === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
         <label class="check"><input type="checkbox" data-sinp="seta"${el.seta ? ' checked' : ''}> Seta no fim (sentido do fluxo)</label>`;
     h += htmlTopicosElemento(pl, el, S);
     if (S.comando) h += `<label>Comando <select data-sinp="cmd"><option value="">—</option>${pl.comandos.map(c => `<option value="${c.id}"${c.id === el.cmd ? ' selected' : ''}>${esc(c.nome)} (${c.tipo})</option>`).join('')}</select></label>
@@ -420,8 +516,9 @@ function sinMudarPropriedade(campo, valor) {
     const el = pl.sinotico.elementos.find(x => x.id === SinEd.sel); if (!el) return;
     sinGuardarDesfazer();
     if (campo === 'w' || campo === 'h') el[campo] = Math.max(10, num(valor, 50));
-    else if (campo === 'n') { el.n = Math.max(2, Math.min(16, num(valor, 2) | 0)); ajustarSaidasComando(pl, el); }
+    else if (campo === 'n') { el.n = Math.max(2, Math.min(16, num(valor, 2) | 0)); ajustarSaidasComando(pl, el); const r = limparLigacoes(pl); if (r) avisar(`${r} ligação(ões) removida(s): a saída não existe mais.`, 'erro', 5000); }
     else if (campo === 'seta') el.seta = !!valor;
+    else if (campo === 'eqSensor') { const eq = pl.equipamentos.find(x => x.id === valor); if (eq) prenderSensor(pl, el, eq); }
     else if (campo === 'rotulo') { const antigo = el.rotulo; el.rotulo = valor; renomearPeloRotulo(pl, el, antigo, valor); }
     else el[campo] = valor;
     if (campo === 'eq' && valor && SIMBOLOS[el.s].equip && !lista(el.tags).length) el.tags = pl.tags.filter(t => t.equipId === valor).slice(0, 3).map(t => t.id);
@@ -439,13 +536,15 @@ function atualizarBarraSinotico() {
 }
 document.addEventListener('keydown', e => {
     if (!SinEd.editando || !document.getElementById('sin-palco') || /input|textarea|select/i.test(e.target.tagName)) return;
-    if (e.key === 'Delete' || e.key === 'Backspace') { sinAcao('excluir'); e.preventDefault(); }
+    if (e.key === 'Backspace' && SinEd.modoTubo) { if (SinEd.modoTubo.meio && SinEd.modoTubo.meio.length) SinEd.modoTubo.meio.pop(); e.preventDefault(); }
+    else if (e.key === 'Delete' || e.key === 'Backspace') { sinAcao('excluir'); e.preventDefault(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { sinAcao(e.shiftKey ? 'refazer' : 'desfazer'); e.preventDefault(); }
     else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { sinAcao('duplicar'); e.preventDefault(); }
-    else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'l') { if (SinEd.modoTubo) sinTerminarTubo(); else sinAdicionar('tubo'); e.preventDefault(); }
+    else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'l') { if (SinEd.modoTubo) cancelarTubulacao(); else sinAdicionar('tubo'); e.preventDefault(); }
     else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === 'r' && SinEd.sel) { sinAcao('girar'); e.preventDefault(); }
     else if (e.key === 'Escape' && SinEd.modoTubo) sinTerminarTubo();
-    else if (e.key === 'Enter' && SinEd.modoTubo) sinTerminarTubo();
+    else if (e.key === 'Enter' && SinEd.modoTubo) avisar('Para terminar, clique numa entrada do mesmo tipo (destacada). Esc ou L cancela.', 'erro', 4000);
+    else if (e.key === 'Backspace' && SinEd.modoTubo && SinEd.modoTubo.meio && SinEd.modoTubo.meio.length) { SinEd.modoTubo.meio.pop(); e.preventDefault(); }
     else if (e.key.startsWith('Arrow') && SinEd.sel) {
         const el = SinEd.pl.sinotico.elementos.find(x => x.id === SinEd.sel); if (!el || el.s === 'tubo') return;
         const d = e.shiftKey ? 1 : SinEd.pl.sinotico.grade;
@@ -487,7 +586,31 @@ function marcasTubo(pts, estilo) {
 
 // ---------------------------------------------------------------- kits: variáveis e comandos pré-preenchidos ao inserir
 function nomeCurtoSimbolo(S) { return S.nome.split(' (')[0].split(' / ')[0]; }
-/** Tópico base de um equipamento: "Elevador de canecas 2" → elevador_canecas_2 (o prefixo da planta entra na frente). */
+/** Tópico base de um elemento: área/elemento, ex.: "recebimento/elevador_de_canecas_2" (o prefixo da planta entra na frente). */
+function topicoBaseEquip(pl, eq) {
+    const ar = eq && pl.areas.find(a => a.id === eq.areaId);
+    return (ar ? baseTopico(ar.nome) + '/' : '') + baseTopico(eq ? eq.nome : 'sem_elemento');
+}
+/** Recalcula os tópicos automáticos (área/elemento/grandeza) depois de renomear área ou elemento ou mudar de área. */
+function atualizarTopicosAuto(pl) {
+    pl.tags.forEach(t => { if (t.topicoAuto && t.kitS && t.equipId) { const eq = pl.equipamentos.find(e => e.id === t.equipId); if (eq) { t.topico = `${topicoBaseEquip(pl, eq)}/${t.kitS}`; t.areaId = eq.areaId; } } });
+    pl.comandos.forEach(c => { if (c.topicoAuto && c.kitS && c.equipId) { const eq = pl.equipamentos.find(e => e.id === c.equipId); if (eq) c.topico = `${topicoBaseEquip(pl, eq)}/${c.kitS}`; } });
+}
+/** Grandeza única dentro do elemento: temperatura, temperatura_2… */
+function grandezaUnica(pl, eqId, base) {
+    const usadas = new Set(pl.tags.filter(t => t.equipId === eqId).map(t => t.kitS));
+    let k = base, i = 2; while (usadas.has(k)) k = `${base}_${i++}`;
+    return k;
+}
+/** Sensor fica sempre preso a um elemento: tópico área/elemento/grandeza. */
+function prenderSensor(pl, el, eq) {
+    const S = SIMBOLOS[el.s], t = el.tag && SUP.tag(el.tag);
+    if (!t || !eq) return;
+    t.equipId = eq.id; t.areaId = eq.areaId; el.eq = eq.id;
+    t.kitS = grandezaUnica(pl, eq.id, baseTopico(S.nomeTag || TIPOS_VAR[S.sensor].nome));
+    t.nome = `${S.nomeTag || TIPOS_VAR[S.sensor].nome} — ${eq.nome}`;
+    if (t.topicoAuto !== false) { t.topicoAuto = true; t.topico = `${topicoBaseEquip(pl, eq)}/${t.kitS}`; }
+}
 function baseTopico(nome) { return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'equipamento'; }
 
 /**
@@ -500,11 +623,13 @@ function aplicarKitSimbolo(pl, el, S) {
     // sensores avulsos: uma variável do tipo do sensor
     if (S.sensor && !S.equip) {
         const T = TIPOS_VAR[S.sensor] || TIPOS_VAR.generico;
-        const nome = `${S.nomeTag || T.nome} ${contar(Z => Z.sensor === S.sensor && (Z.nomeTag || '') === (S.nomeTag || ''))}`;
-        const t = criarTag({ nome, tipo: S.sensor, topico: `sensores/${baseTopico(nome)}`, unidade: S.un != null ? S.un : T.un, areaId: pl.areas[0] ? pl.areas[0].id : '' });
-        t.topicoAuto = true; t.kitS = 'sensor';
+        const eqAlvo = pl.equipamentos.find(x => x.id === el._eqAlvo) || null; delete el._eqAlvo;
+        const t = criarTag({ nome: S.nomeTag || T.nome, tipo: S.sensor, topico: '', unidade: S.un != null ? S.un : T.un });
+        t.topicoAuto = true;
         if (S.lim) t.limites = Object.assign(t.limites, { ativo: true }, S.lim);
+        if (S.sensor === 'estado') t.limites.semDadosS = 0;
         pl.tags.push(t); novasTags.push(t); el.tag = t.id;
+        if (eqAlvo) prenderSensor(pl, el, eqAlvo); else { t.kitS = 'sensor'; t.topico = `sem_elemento/${baseTopico(t.nome)}`; }
     }
     // entradas (emergência, sinaleiro)
     if (S.entrada) {
@@ -531,7 +656,7 @@ function aplicarKitSimbolo(pl, el, S) {
         pl.equipamentos.push(eq); el.eq = eq.id;
         const kit = S.kit || (S.sensor ? { tags: [{ s: 'valor', tipo: S.sensor, nome: S.nomeTag || TIPOS_VAR[S.sensor].nome }], mostrar: ['valor'] } : null);
         if (kit) {
-            const base = baseTopico(eq.nome), porS = {};
+            const base = topicoBaseEquip(pl, eq), porS = {};
             (kit.tags || []).forEach(k => {
                 const T = TIPOS_VAR[k.tipo] || TIPOS_VAR.generico;
                 const t = criarTag({ nome: `${k.nome} — ${eq.nome}`, tipo: k.tipo, topico: `${base}/${k.s}`, unidade: k.un != null ? k.un : T.un, dec: k.dec, faixa: k.faixa, equipId: eq.id, areaId: eq.areaId });
@@ -592,9 +717,9 @@ function renomearPeloRotulo(pl, el, antigo, novo) {
         const eq = SUP.equipamento(el.eq);
         if (!eq) return;
         const velho = eq.nome; eq.nome = novo;
-        const base = baseTopico(novo);
-        pl.tags.filter(t => t.equipId === eq.id).forEach(t => { t.nome = troca(t.nome, velho, novo); if (t.topicoAuto && t.kitS) t.topico = `${base}/${t.kitS}`; });
-        pl.comandos.filter(c => c.equipId === eq.id).forEach(c => { c.nome = troca(c.nome, velho, novo); if (c.topicoAuto && c.kitS) c.topico = `${base}/${c.kitS}`; });
+        pl.tags.filter(t => t.equipId === eq.id).forEach(t => { t.nome = troca(t.nome, velho, novo); });
+        pl.comandos.filter(c => c.equipId === eq.id).forEach(c => { c.nome = troca(c.nome, velho, novo); });
+        atualizarTopicosAuto(pl);
         return;
     }
     const t = el.tag && SUP.tag(el.tag);

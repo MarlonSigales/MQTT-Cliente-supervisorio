@@ -212,10 +212,11 @@ PAGINAS.sinotico = {
             <div class="sin-barra">
                 <button type="button" class="btn btn-secondary btn-sm" data-sin="zoom-" title="Diminuir">−</button><button type="button" class="btn btn-secondary btn-sm" data-sin="zoom-ajustar" title="Caber na tela">${icone('ajustar')}</button><button type="button" class="btn btn-secondary btn-sm" data-sin="zoom+" title="Aumentar">+</button>
                 ${ed ? `<button type="button" class="btn btn-secondary btn-sm" data-sin="desfazer">↶ Desfazer</button><button type="button" class="btn btn-secondary btn-sm" data-sin="refazer">↷ Refazer</button>
-                <button type="button" class="btn btn-secondary btn-sm" data-acao="sin-add" data-s="tubo" title="Desenhar tubulação (atalho L)">╰ Tubulação <kbd>L</kbd></button>
-                <select id="sin-estilo-tubo" aria-label="Tipo de linha das novas tubulações">${Object.entries(ESTILOS_TUBO).map(([k, n]) => `<option value="${k}"${(SinEd.estiloTubo || 'material') === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>
-                <button type="button" class="btn btn-primary btn-sm" data-sin="terminar-tubo" hidden>✓ Terminar tubo</button>
-                <details class="balao-info"><summary>⌨ Atalhos</summary><div class="balao-info-corpo"><p><kbd>L</kbd> tubulação (de novo para terminar) · <kbd>Shift</kbd> linha inclinada · <kbd>Enter</kbd>/<kbd>Esc</kbd> terminar tubo</p><p><kbd>R</kbd> girar · <kbd>Delete</kbd> excluir · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicar · <kbd>Ctrl</kbd>+<kbd>Z</kbd> desfazer · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> refazer · setas movem (Shift: 1 px)</p></div></details>` : ''}
+                <button type="button" class="btn btn-secondary btn-sm" data-acao="sin-add" data-s="tubo" title="Ligar uma saída a uma entrada do mesmo tipo (atalho L)">╰ Tubulação <kbd>L</kbd></button>
+                <button type="button" class="btn btn-danger btn-sm" data-sin="terminar-tubo" hidden>✕ Cancelar ligação</button>
+                ${htmlLegendaPortas()}
+                ${pl.sinotico.elementos.some(e => e.s === 'tubo' && !e.de) ? '<button type="button" class="btn btn-secondary btn-sm" data-acao="sin-prender" title="Prende as linhas antigas às portas mais próximas (até 40 px)">Prender linhas soltas</button>' : ''}
+                <details class="balao-info"><summary>⌨ Atalhos</summary><div class="balao-info-corpo"><p><kbd>L</kbd> tubulação: clique numa saída, faça as curvas clicando no vazio e termine numa entrada do mesmo tipo · <kbd>Backspace</kbd> desfaz a última curva · <kbd>L</kbd>/<kbd>Esc</kbd> cancela · <kbd>Shift</kbd> curva inclinada</p><p><kbd>R</kbd> girar · <kbd>Delete</kbd> excluir · <kbd>Ctrl</kbd>+<kbd>D</kbd> duplicar · <kbd>Ctrl</kbd>+<kbd>Z</kbd> desfazer · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> refazer · setas movem (Shift: 1 px)</p></div></details>` : ''}
                 <button type="button" class="btn btn-secondary btn-sm" data-acao="sin-baixar">${icone('baixar')} SVG</button>
                 ${pl.sinotico.elementos.length ? '' : `<span class="nota">Desenho vazio: clique em "Editar desenho" ou use um modelo pronto no Início.</span>`}
             </div>
@@ -239,8 +240,6 @@ PAGINAS.sinotico = {
             $$('.paleta-item', raiz).forEach(b => { b.hidden = !!q && !b.dataset.busca.normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(q); });
             $$('.paleta-grupo', raiz).forEach(d => { const vis = $$('.paleta-item', d).some(b => !b.hidden); d.hidden = !vis; if (q) d.open = vis; });
         });
-        const est = $('#sin-estilo-tubo', raiz);
-        if (est) est.addEventListener('change', () => { SinEd.estiloTubo = est.value; if (SinEd.modoTubo) SinEd.modoTubo.estilo = est.value; });
         const palco = $('#sin-palco', raiz);
         if (SinEd.zoom === 1 && !SinEd._ajustado) { SinEd._ajustado = true; SinEd.zoom = Math.max(0.3, Math.min(1.2, (palco.clientWidth - 4) / SinEd.pl.sinotico.largura)); }
         sinRedesenhar();
@@ -250,6 +249,7 @@ PAGINAS.sinotico = {
 Object.assign(ACOES, {
     'sin-editar': () => { SinEd.editando = !SinEd.editando; SinEd.sel = null; SinEd.modoTubo = null; renderPagina(true); },
     'sin-add': b => sinAdicionar(b.dataset.s),
+    'sin-prender': () => { sinGuardarDesfazer(); const n = conectarTubosSoltos(SinEd.pl); SUP.alterado('sinotico'); renderPagina(true); avisar(n ? `${n} linha(s) presa(s) às portas.` : 'Nenhuma linha solta perto de uma saída e de uma entrada do mesmo tipo.', n ? 'ok' : 'erro', 5000); },
     'sin-baixar': () => baixarArquivo(new Blob([svgSinoticoArquivo(SinEd.pl)], { type: 'image/svg+xml' }), `sinotico-${nomeSeguro(SinEd.pl.nome)}.svg`)
 });
 

@@ -2,7 +2,7 @@
 
 TODO / QA — Supervisório MQTT (cliente MQTT supervisório)
 Marcadores: [fazer] [futuro] [resolvido] [rejeitado] [parcial]
-Atualizado em 29/10/2026 (versão 2). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
+Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
 
 === DIRETRIZES PERMANENTES
 - SIMPLES PARA QUALQUER UM: um operador de unidade armazenadora tem que conseguir usar sem ler manual.
@@ -46,8 +46,7 @@ Atualizado em 29/10/2026 (versão 2). Os números são fixos (servem de referên
    computador com a página aberta (avisado na tela Nuvem e no relatório dos horímetros).
 30 [futuro] Tópicos em lote (um JSON com várias leituras, Sparkplug B), MQTT 5 e publicação QoS 2.
 31 [futuro] Funcionar sem internet como aplicativo instalável (PWA) e importar CSV de dados de outro sistema.
-38 [futuro] Tubulação que "gruda" nos bocais dos símbolos (pontos de conexão) e acompanha quando o símbolo é movido;
-   hoje o tubo é desenhado à parte (L) e se move sozinho.
+38 [resolvido na versão 3] Tubulação que "gruda" nos bocais dos símbolos e acompanha quando o símbolo é movido.
 39 [futuro] Animação do material por produto (casca, farelo, quebrados, inteiros) nas linhas, como no simulador Garten Flow,
    e cor de linha por produto (com legenda), mantendo o fundo neutro da ISA-101.
 
@@ -141,3 +140,27 @@ Atualizado em 29/10/2026 (versão 2). Os números são fixos (servem de referên
    QA: 24 testes automáticos ok (todos os 137 símbolos desenham, kits sem erro de equação, nomes únicos, tópicos e
    unidades conferidos, renomear e N saídas); editor no navegador (busca, inserir, renomear, editar tópico, atalho L,
    N saídas, faceplate) sem erros; telas em 360/768/1024/1920 px sem estouro.
+
+--- Versão 3 (28/10/2026) — entradas e saídas tipadas, agroindústria, sensores por elemento e salvar
+40 [resolvido] Cada símbolo tem entradas e saídas com tipo: material (quadrado), ar/gases (retângulo largo), líquido
+   (círculo), vapor (triângulo), ar comprimido (hexágono), elétrico (losango) e sinal (círculo pequeno); saída cheia,
+   entrada vazada. Com L, a linha só começa numa saída e só termina numa entrada do mesmo tipo de outro elemento;
+   cliques no vazio fazem as curvas (ortogonais); Backspace desfaz a última curva; a linha acompanha o símbolo movido;
+   "Refazer o caminho automático" e "Prender linhas soltas" para desenhos antigos. Modelos prontos já vêm ligados.
+41 [resolvido] Agroindústria em geral: balança misturadora, misturadores horizontal/vertical, vagão misturador, moinho de
+   martelos, peletizadora, extrusora, rosca dosadora, picador; leite (ordenhadeira, bomba de vácuo, medidor, pré-resfriador,
+   tanque resfriador, tarro, caminhão-tanque, silo, pasteurizador, homogeneizador, desnatadeira, envasadora, CIP);
+   frutas e hortaliças (lavadora, classificadora de N saídas, mesa de seleção, túnel de congelamento, embaladora);
+   utilidades (caldeira, chiller, caixa d'água, poço com bomba, biodigestor).
+42 [resolvido] Sensor é sempre de um elemento: sem elemento selecionado, o editor pergunta de qual; o tópico é
+   área/elemento/sensor (ex.: armazenagem/silo_1/temperatura) e acompanha renomear área e elemento, salvo se editado à mão.
+43 [resolvido] Botão "Salvar" no topo (e Ctrl+S): grava no navegador e na nuvem da equipe; sem nuvem, baixa o projeto (.zip).
+44 [resolvido] Ciclones e afins: multiciclone, ciclone de casca, válvula rotativa sob ciclone, câmara de decantação, filtro
+   de cartuchos, lavador de gases e coifa (todos viram elemento, aceitam sensores). 29 sensores novos: presença de grão,
+   chave de nível vibratória, nível por radar, fluxo de grão, entupimento (já com alarme), umidade em linha, pressostato,
+   manômetro, pressão diferencial, vácuo, fluxostato, vazão eletromagnética, mássica e de ar, termostato, termo-higrômetro,
+   velocidade da correia, fim de curso, indutivo, detector de faísca (alarme), gás, pó, pH, condutividade, turbidez,
+   anemômetro, pluviômetro e piranômetro.
+   QA: 27 testes automáticos ok (portas válidas em todos os 204 símbolos, mesmo tipo nas ligações dos modelos, sensor preso
+   ao elemento com tópico conferido, ciclones e sensores novos); no navegador: começar numa entrada é recusado, tipo
+   diferente é recusado, ligação válida fica presa e acompanha o símbolo movido, Salvar baixa o projeto; sem erros.

@@ -18,9 +18,12 @@ Feito para unidades de pós-colheita e armazenagem, laboratórios e pequenas ind
   realimentação de estados com observador) com ganhos carregados de arquivo .m/.json, colados ou recebidos por MQTT, e
   sintonia pelo degrau no histórico.
 - **Horímetros**: desligado, ligado em vazio e trabalhando; partidas, utilização e energia gasta em vazio.
-- **Sinótico**: 137 símbolos (UBG de arroz, balanças, caminhões, guilhotinas e comportas para material e ar, selecionadores de
-  N saídas, proteção contra explosão, elétrica e P&ID da ISA 5.1). Ao inserir, as variáveis e os comandos já nascem com tópico
-  e unidade; tubulação pelo atalho **L**; **modelos prontos** com simulação para testar sem broker.
+- **Sinótico**: 204 símbolos (UBG de arroz, balanças e misturadoras, caminhões, guilhotinas e comportas para material e ar,
+  selecionadores de N saídas, ciclones e filtros, leite, ração, frutas, utilidades, proteção contra explosão, elétrica, P&ID da
+  ISA 5.1 e dezenas de sensores). Cada símbolo tem **entradas e saídas tipadas** (material, ar, líquido, vapor, ar comprimido,
+  elétrico, sinal); a tubulação (**L**) vai sempre de uma saída a uma entrada do mesmo tipo e acompanha o símbolo. Sensores
+  são sempre de um elemento, com tópico **área/elemento/sensor**; **modelos prontos** com simulação para testar sem broker.
+- **Salvar** (botão no topo ou Ctrl+S): navegador + nuvem da equipe, ou baixa o projeto.
 - **Relatórios** do período (energia e custo, horímetros, variáveis, gráficos, alarmes, comandos) em PDF, HTML e CSV.
 - **Logs**, monitor MQTT, publicar à mão e **descobrir tópicos** (cria as variáveis com um clique).
 - **Nuvem da equipe (MEGA)**: configuração com versões e os **dados passados**, um arquivo por planta e por dia.

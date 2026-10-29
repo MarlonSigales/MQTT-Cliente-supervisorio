@@ -487,3 +487,39 @@ kbd { background: #fff; border: 1px solid var(--borda); border-bottom-width: 2px
 .faceplate { width: min(100%, 760px); }
 .faceplate .card-topo h2 { font-size: 1.1rem; }
 .faceplate .cmds { margin: 0 0 0.6rem; }
+
+/* ---------------- portas (entradas e saídas) e ligações tipadas ---------------- */
+.portas { display: none; }
+.sin-svg.editando .portas { display: inline; }
+.porta { cursor: crosshair; }
+.porta-alvo { fill: transparent; stroke: none; }
+.porta-forma { stroke: #2c3b39; stroke-width: 1.4; }
+.porta-forma.cheia { fill: #2c3b39; }
+.porta-forma.vazada { fill: #fff; }
+.p-material .porta-forma.cheia { fill: #6d4c1f; } .p-material .porta-forma { stroke: #6d4c1f; }
+.p-ar .porta-forma.cheia { fill: #4a7b9d; } .p-ar .porta-forma { stroke: #4a7b9d; }
+.p-liquido .porta-forma.cheia { fill: #1f6fb2; } .p-liquido .porta-forma { stroke: #1f6fb2; }
+.p-vapor .porta-forma.cheia { fill: #8a4f9e; } .p-vapor .porta-forma { stroke: #8a4f9e; }
+.p-ar_comprimido .porta-forma.cheia { fill: #2a8a8a; } .p-ar_comprimido .porta-forma { stroke: #2a8a8a; }
+.p-eletrico .porta-forma.cheia { fill: #b07a00; } .p-eletrico .porta-forma { stroke: #b07a00; }
+.p-sinal .porta-forma.cheia { fill: #5f6f6d; } .p-sinal .porta-forma { stroke: #5f6f6d; }
+.porta:hover .porta-forma { stroke-width: 2.6; }
+.sin-svg.ligando .porta { opacity: .25; }
+.sin-svg.ligando .porta.alvo-valido { opacity: 1; }
+.sin-svg.ligando .porta.alvo-valido .porta-alvo { fill: rgba(64,149,128,.18); stroke: var(--verde); stroke-width: 2; animation: pulsar 1s ease-in-out infinite; }
+@keyframes pulsar { 50% { stroke-opacity: .2; } }
+body.sin-desenhando .sin-svg.editando .sin-el:not(.sin-tubo) { cursor: crosshair; }
+.tubo-temp[data-tipo="material"] { stroke: #6d4c1f; } .tubo-temp[data-tipo="ar"] { stroke: #4a7b9d; stroke-width: 8; stroke-dasharray: none; opacity: .6; }
+.tubo-temp[data-tipo="liquido"] { stroke: #1f6fb2; } .tubo-temp[data-tipo="vapor"] { stroke: #8a4f9e; } .tubo-temp[data-tipo="eletrico"] { stroke: #b07a00; } .tubo-temp[data-tipo="sinal"], .tubo-temp[data-tipo="ar_comprimido"] { stroke: #2a8a8a; stroke-width: 2; }
+.sin-tubo.tubo-liquido .tubo-fundo { stroke: #dfe7e5; stroke-width: 7; }
+.sin-tubo.tubo-liquido .tubo-linha { stroke: #3d5a6b; stroke-width: 3.5; }
+.sin-tubo.tubo-liquido.est-trabalhando .tubo-fluxo { stroke: #e9f5f3; stroke-width: 1.5; }
+.sin-tubo.tubo-vapor .tubo-fundo { stroke: transparent; }
+.sin-tubo.tubo-vapor .tubo-linha { stroke: #2c3b39; stroke-width: 2.5; stroke-dasharray: 16 5; }
+.sin-tubo.tubo-vapor .tubo-fluxo { display: none; }
+.lista-portas { list-style: none; padding: 0; }
+.lista-portas li { display: flex; align-items: center; gap: 0.2rem; margin: 0.15rem 0; }
+.lista-portas svg { flex: none; }
+.legenda-portas > summary { white-space: nowrap; }
+.topo-salvar { flex: none; }
+@media (max-width: 600px) { .topo-salvar span { display: none; } }

@@ -33,7 +33,13 @@ function construtor(nome, prefixo) {
         cmd(eq, p) { const c = criarComando(Object.assign({ equipId: eq ? eq.id : '' }, p)); pl.comandos.push(c); return c; },
         horimetro(eq, tag, lig, trab, pot) { Object.assign(eq.horimetro, { ativo: true, fonte: 'tag', tagId: tag.id, limLigado: lig, limTrabalho: trab }); if (pot) eq.tagPotencia = pot.id; },
         el(s, x, y, extra = {}) { const S = SIMBOLOS[s]; const e = Object.assign({ id: uid('el'), s, x, y, w: S.w, h: S.h, rot: 0, rotulo: '', tags: [] }, extra); pl.sinotico.elementos.push(e); return e; },
-        tubo(pts, eq) { pl.sinotico.elementos.push({ id: uid('el'), s: 'tubo', pts, eq: eq ? eq.id : '' }); }
+        tubo(pts, eq) { pl.sinotico.elementos.push({ id: uid('el'), s: 'tubo', pts, eq: eq ? eq.id : '' }); },
+        /** Liga a saída "sN" de um símbolo à entrada "eN" de outro (o tipo de linha vem das portas). */
+        liga(a, sa, c, ec, eq, meio = []) {
+            const pa = portasDoElemento(a).find(p => p.id === sa), pc = portasDoElemento(c).find(p => p.id === ec);
+            if (!pa || !pc || pa.tipo !== pc.tipo) throw new Error(`modelo: ligação inválida ${a.s}.${sa} → ${c.s}.${ec}`);
+            pl.sinotico.elementos.push({ id: uid('el'), s: 'tubo', de: { el: a.id, p: sa }, para: { el: c.id, p: ec }, meio, tipo: pa.tipo, estilo: TIPOS_PORTA[pa.tipo].estilo, seta: true, eq: eq ? eq.id : (a.eq || '') });
+        }
     };
     return b;
 }
@@ -112,27 +118,27 @@ const MODELOS_PRONTOS = {
             const S = b.pl.sinotico; S.largura = 1600; S.altura = 900;
             b.el('area', 20, 30, { w: 360, h: 840, rotulo: 'Recebimento' }); b.el('area', 400, 30, { w: 470, h: 840, rotulo: 'Pré-limpeza e secagem' }); b.el('area', 890, 30, { w: 690, h: 640, rotulo: 'Armazenagem' }); b.el('area', 890, 690, { w: 690, h: 180, rotulo: 'Utilidades e clima' });
             b.el('balanca', 40, 120, { eq: bal.id, rotulo: 'Balança', tags: [b.porVar.peso_balanca.id] });
-            b.el('moega', 60, 560, { eq: moega.id, rotulo: 'Moega' });
-            b.el('elevador', 260, 330, { eq: e1.id, rotulo: 'Elevador 1', h: 340, tags: [m1.I.id, m1.P.id] });
-            b.tubo([[190, 600], [260, 650]], e1);
-            b.el('prelimpeza', 430, 120, { eq: pre.id, rotulo: 'Pré-limpeza', tags: [m2.I.id] });
-            b.tubo([[306, 345], [380, 345], [380, 160], [430, 160]], e1);
-            b.el('secador', 680, 160, { eq: sec.id, rotulo: 'Secador', h: 300, tags: [tAr.id, b.porVar.t_massa.id, b.porVar.ug_saida.id] });
-            b.tubo([[550, 160], [690, 160]], pre);
-            b.el('fornalha', 470, 400, { eq: forn.id, rotulo: 'Fornalha', tags: [b.porVar.t_fornalha.id, reg.id] });
-            b.tubo([[550, 440], [690, 440]], sec);
+            const eMoega = b.el('moega', 60, 560, { eq: moega.id, rotulo: 'Moega' });
+            const eE1 = b.el('elevador', 260, 330, { eq: e1.id, rotulo: 'Elevador 1', h: 340, tags: [m1.I.id, m1.P.id] });
+            b.liga(eMoega, 's0', eE1, 'e0', e1);
+            const ePre = b.el('prelimpeza', 430, 120, { eq: pre.id, rotulo: 'Pré-limpeza', tags: [m2.I.id] });
+            b.liga(eE1, 's0', ePre, 'e0', e1);
+            const eSec = b.el('secador', 680, 160, { eq: sec.id, rotulo: 'Secador', h: 300, tags: [tAr.id, b.porVar.t_massa.id, b.porVar.ug_saida.id] });
+            b.liga(ePre, 's0', eSec, 'e0', pre, [[490, 100]]);
+            const eForn = b.el('fornalha', 470, 400, { eq: forn.id, rotulo: 'Fornalha', tags: [b.porVar.t_fornalha.id, reg.id] });
+            b.liga(eForn, 's0', eSec, 'e1', sec);
             b.el('setpoint', 430, 640, { cmd: b.pl.comandos.find(c => c.tipo === 'setpoint').id });
             b.el('chave', 430, 700, { cmd: b.pl.comandos.find(c => c.topico === 'secador/ventilador/cmd').id, w: 230 });
-            b.el('elevador', 910, 300, { eq: e2.id, rotulo: 'Elevador 2', h: 320 });
-            b.tubo([[730, 520], [730, 600], [910, 600]], sec);
-            b.el('transportador', 960, 120, { eq: red.id, rotulo: 'Redler', w: 560, tags: [] });
-            b.tubo([[956, 310], [956, 160]], e2);
+            const eE2 = b.el('elevador', 910, 300, { eq: e2.id, rotulo: 'Elevador 2', h: 320 });
+            b.liga(eSec, 's0', eE2, 'e0', sec);
+            const eRed = b.el('transportador', 960, 120, { eq: red.id, rotulo: 'Redler', w: 560, tags: [], n: 2 });
+            b.liga(eE2, 's0', eRed, 'e0', e2);
             silos.forEach((x, i) => {
                 const X = 1060 + i * 260;
-                b.el('silo', X, 230, { eq: x.s.id, rotulo: `Silo ${i + 1}`, w: 130, h: 230, tagNivel: b.porVar[`nivel_s${i + 1}`].id, tags: [b.porVar[`t_grao_s${i + 1}`].id, b.porVar[`co2_s${i + 1}`].id] });
-                b.tubo([[X + 65, 152], [X + 65, 232]], red);
-                b.el('ventilador', X - 70, 520, { eq: x.v.id, rotulo: `Aeração ${i + 1}`, tags: [x.mv.I.id] });
-                b.tubo([[X - 6, 552], [X + 30, 552], [X + 30, 440]], x.v);
+                const eSilo = b.el('silo', X, 230, { eq: x.s.id, rotulo: `Silo ${i + 1}`, w: 130, h: 230, tagNivel: b.porVar[`nivel_s${i + 1}`].id, tags: [b.porVar[`t_grao_s${i + 1}`].id, b.porVar[`co2_s${i + 1}`].id] });
+                b.liga(eRed, 's' + i, eSilo, 'e0', red);
+                const eVent = b.el('ventilador', X - 90, 470, { eq: x.v.id, rotulo: `Aeração ${i + 1}`, tags: [x.mv.I.id] });
+                b.liga(eVent, 's0', eSilo, 'e1', x.v);
                 b.el('chave', X - 70, 610, { cmd: b.pl.comandos.find(c => c.topico === `silo${i + 1}/ventilador/cmd`).id, w: 200 });
             });
             b.el('painel', 920, 740, { eq: qg.id, rotulo: 'QGBT', tags: [] });
@@ -206,12 +212,13 @@ const MODELOS_PRONTOS = {
             b.el('area', 20, 30, { w: 740, h: 640, rotulo: 'Câmaras' }); b.el('area', 780, 30, { w: 400, h: 640, rotulo: 'Casa de máquinas' });
             cams.forEach((x, i) => {
                 const Y = 90 + i * 300;
-                b.el('camara', 60, Y, { eq: x.c.id, rotulo: `Câmara ${i + 1}`, w: 260, h: 170, tags: [x.T.id, b.porVar[`ur_c${i + 1}`].id, b.porVar[`co2_c${i + 1}`].id, b.porVar[`porta_c${i + 1}`].id] });
+                const eCam = b.el('camara', 60, Y, { eq: x.c.id, rotulo: `Câmara ${i + 1}`, w: 260, h: 170, tags: [x.T.id, b.porVar[`ur_c${i + 1}`].id, b.porVar[`co2_c${i + 1}`].id, b.porVar[`porta_c${i + 1}`].id] });
                 b.el('evaporador', 200, Y + 10, { eq: x.evap.id, rotulo: '' });
                 b.el('setpoint', 400, Y + 20, { cmd: b.pl.comandos.find(c => c.topico === `camara${i + 1}/sp`).id, w: 220 });
                 b.el('chave', 400, Y + 80, { cmd: b.pl.comandos.find(c => c.topico === `compressor${i + 1}/cmd`).id, w: 260 });
-                b.el('compressor', 860, Y + 40, { eq: x.comp.id, rotulo: `Compressor ${i + 1}`, tags: [x.m.I.id, x.m.P.id] });
-                b.tubo([[860, Y + 68], [700, Y + 68], [700, Y + 25], [290, Y + 25]], x.comp);
+                const eComp = b.el('compressor', 860, Y + 40, { eq: x.comp.id, rotulo: `Compressor ${i + 1}`, tags: [x.m.I.id, x.m.P.id] });
+                b.liga(eComp, 's0', eCam, 'e0', x.comp, [[760, Y + 30]]);
+                b.liga(eCam, 's0', eComp, 'e0', x.comp, [[720, Y + 140]]);
             });
             b.el('painel', 1050, 90, { eq: qg.id, rotulo: 'Medidor' });
             b.el('valor', 1000, 230, { tag: pT.id }); b.el('valor', 1000, 290, { tag: b.porVar.energia_total.id });

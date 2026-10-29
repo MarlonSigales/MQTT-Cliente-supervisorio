@@ -320,12 +320,12 @@ teste('Biblioteca do sinótico: todos os símbolos desenham e os kits criam vari
     igual(new Set(pl.tags.map(t => t.variavel)).size, pl.tags.length, 'nomes de variável únicos');
     const sem = pl.tags.filter(t => t.origem === 'mqtt' && !t.topico); igual(sem.map(t => t.nome), [], 'toda variável MQTT tem tópico');
     const elev = pl.tags.find(t => t.nome === 'Corrente — Elevador de canecas 1');
-    igual(topicoCompleto(pl, elev.topico), 'ubg/elevador_de_canecas_1/corrente'); igual(elev.unidade, 'A'); ok(elev.limites.ativo, 'limite de corrente');
+    igual(topicoCompleto(pl, elev.topico), 'ubg/area_1/elevador_de_canecas_1/corrente', 'área/elemento/grandeza'); igual(elev.unidade, 'A'); ok(elev.limites.ativo, 'limite de corrente');
     const eqElev = pl.equipamentos.find(e => e.nome === 'Elevador de canecas 1');
     ok(eqElev.horimetro.ativo && eqElev.tagPotencia, 'horímetro e potência do motor');
-    const ens = pl.comandos.find(c => c.nome.startsWith('Peso do saco') && c.tipo === 'setpoint'); igual([ens.unidade, ens.topico], ['kg', 'balanca_ensacadora_1/sp_peso']);
+    const ens = pl.comandos.find(c => c.nome.startsWith('Peso do saco') && c.tipo === 'setpoint'); igual([ens.unidade, ens.topico], ['kg', 'area_1/balanca_ensacadora_1/sp_peso']);
     const sel = pl.sinotico.elementos.find(e => e.s === 'selecionadora_optica'); igual(sel.n, 3);
-    const tt = pl.tags.find(t => t.kitS === 'sensor' && t.tipo === 'temperatura'); igual([tt.unidade, tt.topico.split('/')[0]], ['°C', 'sensores']);
+    const tt = pl.tags.find(t => t.kitS === 'sensor' && t.tipo === 'temperatura'); igual([tt.unidade, tt.topico.split('/')[0]], ['°C', 'sem_elemento'], 'sensor sem elemento fica marcado');
     const bot = pl.comandos.find(c => c.kitS === 'comando'); ok(bot && bot.topico.startsWith('comandos/'), 'botão com tópico');
 });
 teste('Sinótico: renomear atualiza os tópicos automáticos; tópico editado à mão fica; N saídas e linhas P&ID', () => {
@@ -336,10 +336,75 @@ teste('Sinótico: renomear atualiza os tópicos automáticos; tópico editado à
     el.n = 6; ajustarSaidasComando(pl, el); igual(cmd.max, 6);
     const t = pl.tags.find(x => x.kitS === 'saida'); t.topico = 'campo/dist/pos'; t.topicoAuto = false;
     renomearPeloRotulo(pl, el, el.rotulo, 'Distribuidor Silos A');
-    igual(cmd.topico, 'distribuidor_silos_a/sp_saida', 'automático acompanha'); igual(t.topico, 'campo/dist/pos', 'editado fica');
+    atualizarTopicosAuto(pl); igual(cmd.topico, 'area_1/distribuidor_silos_a/sp_saida', 'automático acompanha'); igual(t.topico, 'campo/dist/pos', 'editado fica');
     ok(SUP.equipamento(el.eq).nome === 'Distribuidor Silos A');
     ok(marcasTubo([[0, 0], [200, 0]], 'pneumatico').includes('tubo-marca')); igual(marcasTubo([[0, 0], [200, 0]], 'material'), '');
     ok(svgElemento(pl, { id: 'x', s: 'tubo', pts: [[0, 0], [100, 0]], estilo: 'dados', seta: true }, false).includes('marker-end'));
+});
+
+teste('Sensor preso ao elemento: tópico área/elemento/sensor e acompanha renomear área e elemento', () => {
+    const pl = plantaEmBranco('Sens'); pl.areas[0].nome = 'Armazenagem'; SUP.p = criarProjetoVazio(); SUP.p.plantas.push(pl);
+    const Ss = SIMBOLOS.silo, es = { id: uid('el'), s: 'silo', x: 0, y: 0, w: Ss.w, h: Ss.h, rotulo: 'Silo', tags: [] };
+    aplicarKitSimbolo(pl, es, Ss); pl.sinotico.elementos.push(es);
+    const eq = SUP.equipamento(es.eq);
+    const S = SIMBOLOS.sensor_temperatura, el = { id: uid('el'), s: 'sensor_temperatura', x: 0, y: 0, w: S.w, h: S.h, tags: [], _eqAlvo: eq.id };
+    aplicarKitSimbolo(pl, el, S); pl.sinotico.elementos.push(el);
+    const t = SUP.tag(el.tag);
+    igual([t.topico, t.unidade, t.equipId], ['armazenagem/silo_1/temperatura', '°C', eq.id]);
+    const el2 = { id: uid('el'), s: 'sensor_temperatura', x: 0, y: 0, w: S.w, h: S.h, tags: [], _eqAlvo: eq.id };
+    aplicarKitSimbolo(pl, el2, S); igual(SUP.tag(el2.tag).topico, 'armazenagem/silo_1/temperatura_2', 'segundo sensor do mesmo tipo');
+    pl.areas[0].nome = 'Armazém A'; renomearPeloRotulo(pl, es, 'Silo 1', 'Silo Norte');
+    igual(t.topico, 'armazem_a/silo_norte/temperatura', 'renomear área e elemento atualiza');
+    t.topico = 'campo/tt101'; t.topicoAuto = false; atualizarTopicosAuto(pl); igual(t.topico, 'campo/tt101', 'editado à mão fica');
+});
+teste('Ciclones e sensores novos: símbolos, portas e tópico área/elemento/sensor', () => {
+    ['multiciclone', 'ciclone_casca', 'valvula_ciclone', 'camara_decantacao', 'filtro_cartucho', 'lavador_gases', 'coifa_captacao'].forEach(k => {
+        const S = SIMBOLOS[k]; ok(S && S.svg(S.w, S.h).includes('<'), 'símbolo ' + k);
+        const ps = portasDoElemento({ s: k, x: 0, y: 0 });
+        ok(ps.some(p => p.tipo === (k === 'valvula_ciclone' ? 'material' : 'ar')), 'porta em ' + k);
+    });
+    const sens = Object.keys(SIMBOLOS).filter(k => SIMBOLOS[k].sensor && !SIMBOLOS[k].equip);
+    ok(sens.length >= 35, 'sensores: ' + sens.length);
+    const pl = plantaEmBranco('Po'); SUP.p = criarProjetoVazio(); SUP.p.plantas.push(pl);
+    const Sc = SIMBOLOS.ciclone, ec = { id: uid('el'), s: 'ciclone', x: 0, y: 0, w: Sc.w, h: Sc.h, rotulo: 'Ciclone', tags: [] };
+    aplicarKitSimbolo(pl, ec, Sc); pl.sinotico.elementos.push(ec);
+    const eq = SUP.equipamento(ec.eq); ok(eq, 'ciclone vira elemento');
+    const casos = { sensor_presenca_grao: 'presenca_de_grao', sensor_pressao_dif: 'pressao_diferencial', vazao_ar: 'vazao_de_ar', sensor_entupimento: 'entupimento' };
+    for (const [k, g] of Object.entries(casos)) {
+        const S = SIMBOLOS[k], el = { id: uid('el'), s: k, x: 0, y: 0, w: S.w, h: S.h, tags: [], _eqAlvo: eq.id };
+        aplicarKitSimbolo(pl, el, S); pl.sinotico.elementos.push(el);
+        const t = SUP.tag(el.tag); igual(t.topico.split('/').slice(1).join('/'), baseTopico(eq.nome) + '/' + g, k);
+    }
+    ok(SUP.tag(pl.sinotico.elementos.at(-1).tag).limites.ativo, 'entupimento já vem com alarme');
+});
+teste('Portas: todos os símbolos têm portas válidas; ligação ortogonal; modelos ligados por portas do mesmo tipo', () => {
+    let total = 0;
+    for (const [k, S] of Object.entries(SIMBOLOS)) {
+        if (['tubo', 'area', 'texto', 'valor'].includes(k)) continue;
+        const txt = S.portas || PORTAS_SIMBOLOS[k] || '';
+        txt.trim().split(/\s+/).filter(Boolean).forEach(tk => ok(/^(\w+):([es])@(N|T|[\d.]+,[\d.]+)(?::([tblr]))?$/.test(tk) && TIPOS_PORTA[tk.split(':')[0]], `porta inválida em ${k}: ${tk}`));
+        const ps = portasDoElemento({ s: k, x: 0, y: 0, n: S.n });
+        total += ps.length;
+        igual(new Set(ps.map(p => p.id)).size, ps.length, 'ids únicos em ' + k);
+    }
+    ok(total > 300, 'portas: ' + total);
+    ok(Object.keys(SIMBOLOS).filter(k => SIMBOLOS[k].grupo && SIMBOLOS[k].grupo.startsWith('Agroindústria')).length >= 25, 'símbolos de agroindústria');
+    ok(SIMBOLOS.balanca_misturadora && SIMBOLOS.tanque_resfriador && SIMBOLOS.ordenhadeira && SIMBOLOS.pasteurizador, 'misturadora e leite');
+    const c = caminhoLigacao({ x: 0, y: 0, dx: 0, dy: 1 }, { x: 100, y: 200, dx: 0, dy: -1 });
+    for (let i = 1; i < c.length; i++) ok(c[i][0] === c[i - 1][0] || c[i][1] === c[i - 1][1], 'trechos retos');
+    igual([c[0], c[c.length - 1]], [[0, 0], [100, 200]]);
+    // giro: porta da direita vira porta de baixo
+    const pd = portaGlobal({ s: 'exaustor_axial', x: 0, y: 0, w: 70, h: 70, rot: 90 }, portasDoElemento({ s: 'exaustor_axial' }).find(p => p.id === 's0'));
+    igual([Math.round(pd.x), Math.round(pd.y), pd.dx, pd.dy], [35, 70, 0, 1]);
+    for (const M of Object.values(MODELOS_PRONTOS)) {
+        const pl = M.montar();
+        const tubos = pl.sinotico.elementos.filter(e => e.s === 'tubo');
+        ok(tubos.every(t => t.de && pontosTubo(pl, t)), 'todas as linhas presas às portas em ' + M.nome);
+        tubos.forEach(t => { const a = acharPorta(pl, t.de), b = acharPorta(pl, t.para); ok(a.io === 's' && b.io === 'e' && a.tipo === b.tipo && t.tipo === a.tipo, 'saída → entrada do mesmo tipo'); });
+    }
+    // menos saídas apaga as ligações que ficaram sem porta
+    const pl = MODELOS_PRONTOS.ubs.montar(), red = pl.sinotico.elementos.find(e => e.s === 'transportador');
+    red.n = 1; igual(limparLigacoes(pl), 1);
 });
 
 // ---------------------------------------------------------------- MEGA simulado (mesma interface usada do megajs)

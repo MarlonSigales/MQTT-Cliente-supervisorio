@@ -8,7 +8,7 @@
 
 'use strict';
 
-const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029a' };
+const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029c' };
 const PAGINAS = {};        // nome → { titulo, render(param) → html, montar?(raiz, param), atualizar?(sujos, forcar) }
 const ACOES = {};          // data-acao → função(botão, evento)
 
@@ -334,8 +334,26 @@ Object.assign(ACOES, {
         location.hash = '#/configurar/' + pl.id;
         avisar('Planta criada. Preencha a conexão com o broker e use "Descobrir tópicos" para criar as variáveis com um clique.', 'ok', 8000);
     },
-    'tour': () => mostrarTour(true)
+    'tour': () => mostrarTour(true),
+    'salvar-projeto': () => salvarProjeto()
 });
+
+/** Botão Salvar (e Ctrl+S): grava neste navegador, na nuvem da equipe (se conectada) ou baixa o arquivo do projeto. */
+async function salvarProjeto() {
+    clearTimeout(SUP._t);
+    const okLocal = SUP.gravar();
+    await histDescarregar();
+    const b = $('#topo-salvar');
+    if (b) { b.disabled = true; b.querySelector('span').textContent = 'Salvando…'; }
+    try {
+        if (nuvemConectada()) { const n = await salvarConfigNuvem(); avisar(`Projeto salvo neste navegador e na nuvem da equipe (pasta ${n}).`); }
+        else { baixarArquivo(await arquivoProjeto(), `${nomeSeguro(SUP.p.nome)}-${diaISO(Date.now())}.zip`); avisar(`Projeto salvo${okLocal ? ' neste navegador' : ''} e baixado como arquivo (.zip). Conecte a nuvem da equipe para salvar lá também.`, 'ok', 6000); }
+        App.salvoEm = new Date();
+        logar('config', 'Projeto salvo pelo usuário');
+    } catch (e) { avisar('Não salvou: ' + e.message, 'erro', 7000); }
+    finally { if (b) { b.disabled = false; b.querySelector('span').textContent = App.salvoEm ? 'Salvo ' + App.salvoEm.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'Salvar'; } }
+}
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); salvarProjeto(); } });
 
 // ---------------------------------------------------------------- tour (até 5 balões na primeira visita)
 function mostrarTour(forcar = false) {
