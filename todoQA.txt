@@ -164,3 +164,16 @@ Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referên
    QA: 27 testes automáticos ok (portas válidas em todos os 204 símbolos, mesmo tipo nas ligações dos modelos, sensor preso
    ao elemento com tópico conferido, ciclones e sensores novos); no navegador: começar numa entrada é recusado, tipo
    diferente é recusado, ligação válida fica presa e acompanha o símbolo movido, Salvar baixa o projeto; sem erros.
+
+--- Versão 4 (29/10/2026) — gêmeo pela nuvem
+45 [resolvido] Gêmeo pela nuvem (MEGA): a mesma planta em dois lugares. O ORIGINAL (na rede da planta, cliente MQTT)
+   sobrescreve a cada 1 min (configurável, mínimo 30 s) SupervisorioMQTT/Gemeo/<planta>__<id>/da_planta.zip com o log do
+   dia todo (amostras.csv, eventos.csv) e estado.json (configuração, valores, horímetros, alarmes, respostas). O GÊMEO não
+   conecta no broker: espelha tudo isso (gráficos, alarmes, relatórios) e mostra a idade do dado; dado com mais de 3
+   intervalos fica "velho" e gera alarme. Comandos e reconhecimentos no gêmeo sobrescrevem do_gemeo.json; o original
+   executa uma vez só, com as mesmas faixas, dentro da validade (padrão 5 min) e conforme a política (todos, só setpoints,
+   nenhum), e confirma no envio seguinte. O papel (original/gêmeo) é de cada navegador; a configuração vem do original.
+   QA: 28 testes ok (arquivo sobrescrito, espelho de valor/alarme/configuração, faixa no gêmeo, execução única, confirmação,
+   comando vencido recusado); tela Nuvem em 1400 e 380 px sem erros.
+46 [futuro] Original como serviço (Node) para não depender de uma aba aberta; estimativa de cota por planta na tela.
+

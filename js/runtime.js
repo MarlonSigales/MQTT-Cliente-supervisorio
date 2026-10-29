@@ -124,6 +124,7 @@ function receber(pl, topico, bytes, info) {
 
 // ---------------------------------------------------------------- conexões
 function conectarPlanta(pl) {
+    if (typeof ehGemeo === 'function' && ehGemeo(pl)) { logar('conexao', 'Gêmeo: esta planta não conecta no broker (dados e comandos vêm pela nuvem)', pl.nome); return; }
     desconectarPlanta(pl.id, true);
     const c = pl.conexao;
     const prefixo = String(c.prefixo || '').replace(/\/+$/, '');
@@ -203,6 +204,7 @@ async function publicar(pl, topico, payload, o = {}, motivo = '') {
 
 /** Comando da tela (chave, setpoint ou botão). */
 async function comandar(pl, cmd, valor) {
+    if (typeof ehGemeo === 'function' && ehGemeo(pl)) return gemeoComandar(pl, cmd, valor);
     const topico = topicoCompleto(pl, cmd.topico);
     if (!topico) throw new Error('o comando não tem tópico');
     let payload;
@@ -315,8 +317,10 @@ function ciclo() {
     const agora = Date.now(), dt = RT._ultimo ? Math.min(10, (agora - RT._ultimo) / 1000) : 1;
     RT._ultimo = agora; RT.tick++;
     for (const pl of SUP.p.plantas) {
+        if (typeof ehGemeo === 'function' && ehGemeo(pl)) continue;   // no gêmeo, valores, horímetros e alarmes vêm do original
         try { cicloPlanta(pl, agora, dt); } catch (e) { console.error(e); }
     }
+    if (typeof gemeoCiclo === 'function') gemeoCiclo();
     if (typeof cicloSimulacao === 'function') cicloSimulacao(dt);
     if (RT.tick % 15 === 0) guardarAcumuladores();
     if (RT.tick % 60 === 0 && typeof nuvemHistoricoAutomatico === 'function') nuvemHistoricoAutomatico();

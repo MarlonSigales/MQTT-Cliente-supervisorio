@@ -12,12 +12,17 @@ function cabecalho(titulo, sub = '', extra = '') {
     return `<div class="page-titulo"><div><h1>${titulo}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${extra ? `<div class="page-titulo-acoes">${extra}</div>` : ''}</div>`;
 }
 function chipConexao(pl) {
+    if (typeof ehGemeo === 'function' && ehGemeo(pl)) {
+        const id = idadeGemeo(pl), velho = id == null || id > 3 * gemeoOpcoes(pl).intervaloS * 1000, ge = gemeoEstado(pl.id);
+        return `<span class="chip-con con-${velho ? 'erro' : 'conectado'}" title="${escAttr(ge.erro || 'Gêmeo: os dados vêm do original pela nuvem da equipe')}" data-chipcon="${pl.id}"><i class="ponto-con con-${velho ? 'erro' : 'conectado'}"></i>Gêmeo · ${id == null ? 'sem dados ainda' : 'dados de há ' + formatarDuracao(Math.round(id / 1000))}</span>`;
+    }
     const e = estadoConexao(pl.id), r = RT.con.get(pl.id);
     const txt = { conectado: pl.conexao.tipo === 'simulado' ? 'Simulação rodando' : 'Conectado', conectando: 'Conectando…', erro: 'Sem conexão', desconectado: 'Desconectado' }[e];
     const tit = r && r.detalhe ? r.detalhe : '';
     return `<span class="chip-con con-${e}" title="${escAttr(tit)}" data-chipcon="${pl.id}"><i class="ponto-con con-${e}"></i>${txt}</span>`;
 }
 function botaoConexao(pl, pequeno = true) {
+    if (typeof ehGemeo === 'function' && ehGemeo(pl)) return `<a class="btn btn-secondary ${pequeno ? 'btn-sm' : ''}" href="#/nuvem">${icone('nuvem')} Gêmeo pela nuvem</a>`;
     const e = estadoConexao(pl.id);
     return e === 'desconectado'
         ? `<button type="button" class="btn btn-primary ${pequeno ? 'btn-sm' : ''}" data-acao="conectar" data-pl="${pl.id}">${icone('conectar')} ${pl.conexao.tipo === 'simulado' ? 'Iniciar simulação' : 'Conectar'}</button>`
@@ -449,8 +454,11 @@ async function carregarHistoricoAlarmes() {
         <details><summary>Lista do período (${evs.length})</summary><div class="tabela-rolagem"><table class="tabela"><thead><tr><th>Quando</th><th>Planta</th><th>Alarme</th></tr></thead><tbody>${evs.slice(0, 500).map(e => `<tr><td>${dataHora(e.t)}</td><td>${esc(e.planta)}</td><td>${esc(e.texto)}</td></tr>`).join('')}</tbody></table></div></details>`;
 }
 Object.assign(ACOES, {
-    'reconhecer': b => { reconhecerAlarme(b.dataset.k); agendarTela(true); },
-    'reconhecer-todos': () => { reconhecerTodos(); agendarTela(true); },
+    'reconhecer': async b => { const a = ALM.ativos.get(b.dataset.k), pl = a && SUP.planta(a.plId); if (pl && ehGemeo(pl)) await gemeoReconhecer(pl, b.dataset.k); else reconhecerAlarme(b.dataset.k); agendarTela(true); },
+    'reconhecer-todos': async () => {
+        for (const [k, a] of [...ALM.ativos]) { const pl = SUP.planta(a.plId); if (pl && ehGemeo(pl) && !a.reconhecido && !(a.suprimidoAte > Date.now())) await gemeoReconhecer(pl, k); }
+        reconhecerTodos(); agendarTela(true);
+    },
     'suprimir': async b => {
         const al = ALM.ativos.get(b.dataset.k); if (!al) return;
         const r = await confirmar('Suprimir alarme', `${esc(al.texto)}<br>Some da lista e não toca por um tempo; volta sozinho depois. Fica registrado no log.`, { botao: 'Suprimir', campo: { rotulo: 'Por quantos minutos?', tipo: 'number', valor: 60, extra: 'min="5" max="1440" step="5"' } });

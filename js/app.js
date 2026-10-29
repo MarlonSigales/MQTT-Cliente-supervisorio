@@ -8,7 +8,7 @@
 
 'use strict';
 
-const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029c' };
+const App = { rota: 'inicio', param: '', pagina: null, versao: '20261029d' };
 const PAGINAS = {};        // nome → { titulo, render(param) → html, montar?(raiz, param), atualizar?(sujos, forcar) }
 const ACOES = {};          // data-acao → função(botão, evento)
 
@@ -67,21 +67,22 @@ async function acionarComandoTela(pl, cmdId) {
     const cm = pl.comandos.find(c => c.id === cmdId);
     if (!cm) return;
     try {
-        if (estadoConexao(pl.id) !== 'conectado') throw new Error(`a planta "${pl.nome}" está sem conexão — conecte antes de comandar`);
+        const gem = ehGemeo(pl), via = gem ? ' ao original pela nuvem (confirmação no próximo envio do original)' : '';
+        if (!gem && estadoConexao(pl.id) !== 'conectado') throw new Error(`a planta "${pl.nome}" está sem conexão — conecte antes de comandar`);
         if (cm.tipo === 'chave') {
             const atual = estadoComando(pl, cm), novo = atual === 1 ? 0 : 1;
             if (cm.confirmar && !(await confirmar(`${novo ? 'Ligar' : 'Desligar'}: ${cm.nome}?`, `Vai publicar <code>${esc(novo ? cm.payloadLiga : cm.payloadDesliga)}</code> em <code>${esc(topicoCompleto(pl, cm.topico))}</code>.<br>Confira se é seguro ${novo ? 'ligar' : 'desligar'} no local (pessoas, travas, NR-12).`, { botao: novo ? 'Ligar' : 'Desligar', perigo: !novo }))) return;
             await comandar(pl, cm, novo);
-            avisar(`${cm.nome}: comando ${novo ? 'LIGAR' : 'DESLIGAR'} enviado.`);
+            avisar(`${cm.nome}: comando ${novo ? 'LIGAR' : 'DESLIGAR'} enviado${via}.`, 'ok', gem ? 7000 : undefined);
         } else if (cm.tipo === 'setpoint') {
             const atual = cm.tagEstado ? valorTag(cm.tagEstado) : (cm.ultimo ? cm.ultimo.valor : '');
             const v = await confirmar(cm.nome, `Faixa permitida: ${cm.min} a ${cm.max} ${esc(cm.unidade || '')}. Publica em <code>${esc(topicoCompleto(pl, cm.topico))}</code>.`, { botao: 'Enviar', campo: { rotulo: `Novo valor${cm.unidade ? ' (' + cm.unidade + ')' : ''}`, tipo: 'number', valor: atual != null ? atual : '', extra: `step="${cm.passo || 'any'}" min="${cm.min}" max="${cm.max}" required` } });
             if (v == null) return;
             await comandar(pl, cm, v);
-            avisar(`${cm.nome}: ${v} ${cm.unidade || ''} enviado.`);
+            avisar(`${cm.nome}: ${v} ${cm.unidade || ''} enviado${via}.`, 'ok', gem ? 7000 : undefined);
         } else {
             if (cm.confirmar && !(await confirmar(cm.nome + '?', `Publica <code>${esc(cm.payloadLiga)}</code> em <code>${esc(topicoCompleto(pl, cm.topico))}</code>.`))) return;
-            await comandar(pl, cm, 1); avisar(`${cm.nome}: enviado.`);
+            await comandar(pl, cm, 1); avisar(`${cm.nome}: enviado${via}.`, 'ok', gem ? 7000 : undefined);
         }
         agendarTela(true);
     } catch (e) { avisar('Comando não enviado: ' + e.message, 'erro', 7000); logar('comando', `${cm.nome}: não enviado — ${e.message}`, pl.nome, 'erro'); }

@@ -154,7 +154,7 @@ async function listarConfigNuvem() {
 // ---------------------------------------------------------------- histórico (dados passados)
 function inicioDoDia(t) { const d = new Date(t); d.setHours(0, 0, 0, 0); return d.getTime(); }
 /** Monta o ZIP de um dia de uma planta. */
-async function zipDoDia(pl, dia0) {
+async function zipDoDia(pl, dia0, extras = {}) {
     const dia1 = dia0 + 86400000 - 1;
     const ids = pl.tags.map(t => t.id).concat(pl.equipamentos.map(e => 'est:' + e.id));
     const amostras = await histAmostrasDe(ids, dia0, dia1);
@@ -164,6 +164,7 @@ async function zipDoDia(pl, dia0) {
     zip.file('amostras.csv', csvDe(amostras.map(([g, t, v]) => [new Date(t).toLocaleString('pt-BR'), t, g, (nomes.get(g) || {}).nome || g, v, (nomes.get(g) || {}).unidade || '']), ['data e hora', 't_ms', 'id', 'variável', 'valor', 'unidade']));
     zip.file('eventos.csv', csvDe(evs.slice().reverse().map(e => [new Date(e.t).toLocaleString('pt-BR'), e.t, e.tipo, e.nivel, e.texto]), ['data e hora', 't_ms', 'tipo', 'nível', 'texto']));
     zip.file('variaveis.json', JSON.stringify({ planta: pl.nome, plantaId: pl.id, dia: diaISO(dia0), variaveis: pl.tags.map(t => ({ id: t.id, nome: t.nome, variavel: t.variavel, unidade: t.unidade, tipo: t.tipo, topico: topicoCompleto(pl, t.topico) })) }, null, 1));
+    Object.entries(extras).forEach(([n, c]) => zip.file(n, c));
     return { blob: await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } }), n: amostras.length, ne: evs.length };
 }
 /** Envia os dias que faltam (e o dia de hoje). Devolve quantos arquivos foram enviados. */

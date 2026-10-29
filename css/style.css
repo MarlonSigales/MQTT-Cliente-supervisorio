@@ -523,3 +523,8 @@ body.sin-desenhando .sin-svg.editando .sin-el:not(.sin-tubo) { cursor: crosshair
 .legenda-portas > summary { white-space: nowrap; }
 .topo-salvar { flex: none; }
 @media (max-width: 600px) { .topo-salvar span { display: none; } }
+
+/* gêmeo pela nuvem */
+.gemeo-linha { border-top: 1px solid var(--borda, #dfe3e1); padding: 12px 0 4px; }
+.gemeo-linha:first-of-type { border-top: 0; }
+.gemeo-topo { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; margin-bottom: 8px; }

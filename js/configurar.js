@@ -256,6 +256,7 @@ PAGINAS.nuvem = {
             <section class="card cartao-nuvem"><div class="card-topo"><h2>Conta</h2><span class="contador">${on ? `conectado: ${esc(NUVEM.email)}` : em ? `conta: ${esc(em)} (desconectada)` : 'não conectada'}</span></div>
                 <p class="nota">A mesma conta da nuvem do Sistema de Projeto Conceitual pode ser usada; as pastas ficam separadas (SupervisorioMQTT/…). ${htmlPorQueMega()}</p>
                 <div class="botoes">${on ? '<button type="button" class="btn btn-secondary btn-sm" data-acao="nuvem-sair">Sair da nuvem</button>' : '<button type="button" class="btn btn-primary btn-sm" data-acao="nuvem-entrar">Entrar na nuvem</button>'}</div></section>
+            ${htmlGemeo()}
             <section class="card"><h2>Dados passados (histórico)</h2>
                 <label class="campo-inline"><input type="checkbox" data-ref="op.nuvemHistorico"${op.nuvemHistorico ? ' checked' : ''}> Enviar o histórico automaticamente quando a nuvem estiver conectada</label>
                 <div class="grade-campos grade-estreita">
@@ -277,6 +278,54 @@ PAGINAS.nuvem = {
                 <div class="botoes"><button type="button" class="btn btn-danger btn-sm" data-acao="hist-apagar">${icone('lixo')} Apagar o histórico deste navegador</button></div></section></div>`;
     }
 };
+function htmlGemeo() {
+    const kb = b => b ? (b < 1048576 ? (b / 1024).toFixed(0) + ' kB' : (b / 1048576).toFixed(1) + ' MB') : '—';
+    const linhas = SUP.p.plantas.map(pl => {
+        const papel = gemeoPapel(pl), op = gemeoOpcoes(pl), e = gemeoEstado(pl.id);
+        const porDia = e.bytes ? e.bytes * 86400 / op.intervaloS : 0;
+        const st = papel === 'original' ? `Último envio: ${dataHora(e.ultimoEnvio)} · arquivo ${kb(e.bytes)}${porDia ? ` · o gêmeo baixa até ~${kb(porDia)}/dia` : ''}`
+            : papel === 'gemeo' ? `Dados de: ${e.dadosDe ? dataHora(e.dadosDe) : '—'} · arquivo ${kb(e.bytes)}${porDia ? ` · baixando até ~${kb(porDia)}/dia` : ''} · ${pendentesGemeo(pl).length} comando(s) aguardando o original` : 'Desligado';
+        return `<div class="gemeo-linha"><div class="gemeo-topo"><b>${esc(pl.nome)}</b>
+            <div class="seg" role="group" aria-label="Papel deste navegador">${[['', 'Nenhum'], ['original', 'Original (envia)'], ['gemeo', 'Gêmeo (recebe)']].map(([v, n]) => `<button type="button" class="seg-btn${papel === v ? ' ativo' : ''}" data-acao="gemeo-papel" data-pl="${pl.id}" data-papel="${v}">${n}</button>`).join('')}</div></div>
+            <div class="grade-campos grade-estreita">
+                <label>A cada (s) <input type="number" min="30" max="3600" step="10" data-ref="pl:${pl.id}.gemeo.intervaloS" value="${op.intervaloS}"${papel === 'gemeo' ? ' disabled title="Definido no original"' : ''}></label>
+                <label>Comandos do gêmeo <select data-ref="pl:${pl.id}.gemeo.politica"${papel === 'gemeo' ? ' disabled' : ''}>${[['todos', 'aceitar todos'], ['setpoints', 'só setpoints'], ['nenhum', 'não aceitar (só ver)']].map(([v, n]) => `<option value="${v}"${op.politica === v ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+                <label>Validade do comando (min) <input type="number" min="1" max="60" data-ref="pl:${pl.id}.gemeo.validadeMin" value="${op.validadeMin}"${papel === 'gemeo' ? ' disabled' : ''}></label></div>
+            <p class="nota">${st}${e.erro ? ` · <span class="falta">erro: ${esc(e.erro)}</span>` : ''}</p>
+            ${papel ? `<div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="gemeo-agora" data-pl="${pl.id}">${icone('nuvem')} ${papel === 'original' ? 'Enviar agora' : 'Buscar agora'}</button></div>` : ''}</div>`;
+    }).join('');
+    return `<section class="card" id="gemeo"><h2>Gêmeo pela nuvem</h2>
+        <p class="nota">O <b>original</b> fica na rede da planta e é o cliente MQTT; a cada intervalo ele <b>sobrescreve</b> um arquivo com o log do dia todo e o estado atual. O <b>gêmeo</b>, em outro lugar e sem broker, é um supervisório completo da mesma planta com esses dados (com atraso); comandos e reconhecimentos dados nele <b>sobrescrevem</b> outro arquivo, que o original lê, executa (com as mesmas faixas) e confirma. A configuração da planta vem sempre do original. Emergência e intertravamentos nunca devem depender do gêmeo.</p>
+        ${linhas || vazio('Nenhuma planta.')}
+        <h3>Abrir uma planta da nuvem como gêmeo</h3>
+        <div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="gemeo-listar">Ver plantas enviadas por originais</button></div><div id="gemeo-lista"></div></section>`;
+}
+Object.assign(ACOES, {
+    'gemeo-papel': async b => {
+        const pl = SUP.planta(b.dataset.pl), papel = b.dataset.papel;
+        if (papel === 'gemeo' && !(await confirmar('Tornar este navegador o gêmeo?', `"${esc(pl.nome)}" deixa de conectar no broker aqui; valores, alarmes e configuração passam a vir do original pela nuvem, e os comandos vão para o original executar.`, { botao: 'Ser gêmeo' }))) return;
+        if (papel) await nuvemGarantir();
+        definirPapel(pl, papel); SUP.alterado('pl'); renderPagina(true);
+        if (papel) ACOES['gemeo-agora']({ dataset: { pl: pl.id } }).catch(e => avisar(e.message, 'erro', 7000));
+    },
+    'gemeo-agora': async b => {
+        const pl = SUP.planta(b.dataset.pl); await nuvemGarantir();
+        const papel = gemeoPapel(pl), e = gemeoEstado(pl.id);
+        if (papel === 'original') { const n = await naFilaNuvem(() => gemeoEnviarOriginal(pl)); avisar(`Enviado para o gêmeo (${(n / 1024).toFixed(0)} kB).`); }
+        else if (papel === 'gemeo') { e.tsArquivo = 0; await naFilaNuvem(() => gemeoReceber(pl)); avisar('Dados do original recebidos.'); }
+        renderPagina(true);
+    },
+    'gemeo-listar': async () => {
+        const lst = await listarGemeosNuvem(); App.gemeosNuvem = lst;
+        $('#gemeo-lista').innerHTML = lst.length ? `<ul class="lista-nuvem">${lst.map((x, i) => `<li><b>${esc(x.nome)}</b> <span class="nota">enviado ${x.quando ? x.quando.toLocaleString('pt-BR') : '—'}${SUP.planta(x.id) ? ' · já está neste navegador' : ''}</span>
+            <button type="button" class="btn btn-primary btn-sm" data-acao="gemeo-abrir" data-i="${i}">Abrir como gêmeo</button></li>`).join('')}</ul>` : vazio('Nenhum original enviando para esta nuvem ainda.');
+    },
+    'gemeo-abrir': async b => {
+        const x = App.gemeosNuvem[+b.dataset.i];
+        if (gemeoPapel(SUP.planta(x.id)) === 'original') throw new Error('este navegador é o original desta planta');
+        const pl = await abrirComoGemeo(x); renderPagina(true); avisar(`"${pl.nome}" aberta como gêmeo.`);
+    }
+});
 Object.assign(ACOES, {
     'nuvem-entrar': async () => { await nuvemGarantir(); renderPagina(true); avisar('Nuvem conectada.'); },
     'nuvem-sair': () => { nuvemSair(); renderPagina(true); },

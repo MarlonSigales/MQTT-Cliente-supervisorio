@@ -27,6 +27,9 @@ Feito para unidades de pós-colheita e armazenagem, laboratórios e pequenas ind
 - **Relatórios** do período (energia e custo, horímetros, variáveis, gráficos, alarmes, comandos) em PDF, HTML e CSV.
 - **Logs**, monitor MQTT, publicar à mão e **descobrir tópicos** (cria as variáveis com um clique).
 - **Nuvem da equipe (MEGA)**: configuração com versões e os **dados passados**, um arquivo por planta e por dia.
+- **Gêmeo pela nuvem**: o original (na rede da planta) sobrescreve a cada minuto um arquivo com o log do dia e o estado; o
+  gêmeo, em outro lugar e sem broker, é um supervisório completo com esses dados e manda comandos por outro arquivo, que o
+  original executa e confirma.
 
 ## Conectar no broker
 
