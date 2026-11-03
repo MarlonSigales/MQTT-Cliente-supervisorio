@@ -83,6 +83,20 @@ function miniSimbolo(s) {
     return `<svg viewBox="-4 -4 ${S.w + 8} ${S.h + 8}" class="sin-mini sin-simbolo est-desligado">${S.svg(S.w, S.h, {})}</svg>`;
 }
 
+// ---------------------------------------------------------------- produto nas linhas (cor e legenda)
+// Cores na ordem fixa da paleta categórica validada (azul, laranja, água, amarelo, magenta, verde, violeta): nunca
+// geradas nem recicladas; o vermelho fica para alarme (ISA-101: o fundo continua neutro, a cor só marca o produto).
+const PRODUTOS = {
+    arroz_casca: { nome: 'Arroz em casca', cor: '#2a78d6' }, integral: { nome: 'Descascado (integral)', cor: '#eb6834' },
+    branco: { nome: 'Branco (brunido / polido)', cor: '#1baf7a' }, quebrados: { nome: 'Quebrados', cor: '#eda100' },
+    casca: { nome: 'Casca', cor: '#e87ba4' }, farelo: { nome: 'Farelo', cor: '#008300' }, rejeito: { nome: 'Impurezas e rejeito', cor: '#6250d6' }
+};
+function htmlLegendaProdutos(pl) {
+    const usados = [...new Set(pl.sinotico.elementos.filter(e => e.s === 'tubo' && PRODUTOS[e.produto]).map(e => e.produto))];
+    if (!usados.length) return '';
+    return `<div class="legenda-produtos" aria-label="Produtos nas linhas">${Object.keys(PRODUTOS).filter(k => usados.includes(k)).map(k => `<span><i style="background:${PRODUTOS[k].cor}"></i>${esc(PRODUTOS[k].nome)}</span>`).join('')}<span class="nota">linha animada = equipamento de origem trabalhando</span></div>`;
+}
+
 // ---------------------------------------------------------------- desenho de um elemento
 function svgElemento(pl, el, editando) {
     const S = SIMBOLOS[el.s];
@@ -93,8 +107,9 @@ function svgElemento(pl, el, editando) {
         const d = 'M' + pts.map(p => `${p[0]} ${p[1]}`).join(' L');
         const estilo = el.tipo && TIPOS_PORTA[el.tipo] ? TIPOS_PORTA[el.tipo].estilo : ESTILOS_TUBO[el.estilo] ? el.estilo : 'material';
         const alcas = el.de ? lista(el.meio).map((p, i) => `<circle class="sin-ponto" data-meio="${i}" cx="${p[0]}" cy="${p[1]}" r="6"/>`).join('') : pts.map((p, i) => `<circle class="sin-ponto" data-ponto="${i}" cx="${p[0]}" cy="${p[1]}" r="6"/>`).join('');
-        return `<g class="sin-el sin-tubo tubo-${estilo}${el.eq ? '' : ' sem-eq'}" data-id="${el.id}" ${el.eq ? `data-eq="${el.eq}"` : ''}>
-            <path class="tubo-fundo" d="${d}"/><path class="tubo-linha" d="${d}"${el.seta ? ' marker-end="url(#sin-seta)"' : ''}/><path class="tubo-fluxo" d="${d}"/>${marcasTubo(pts, estilo)}
+        const P = PRODUTOS[el.produto];
+        return `<g class="sin-el sin-tubo tubo-${estilo}${el.eq ? '' : ' sem-eq'}${P ? ' com-produto' : ''}" data-id="${el.id}" ${el.eq ? `data-eq="${el.eq}"` : ''}${P ? ` style="--cor-produto:${P.cor}"` : ''}>
+            <path class="tubo-fundo" d="${d}"/><path class="tubo-linha" d="${d}"${el.seta ? ' marker-end="url(#sin-seta)"' : ''}><title>${P ? esc(P.nome) : ''}</title></path><path class="tubo-fluxo" d="${d}"/>${marcasTubo(pts, estilo)}
             ${editando ? `<path class="tubo-toque" d="${d}"/>` + alcas : ''}
         </g>`;
     }
@@ -547,6 +562,7 @@ function htmlPropriedades(pl) {
     if (el.s === 'tubo' && el.de) {
         const ori = pl.sinotico.elementos.find(x => x.id === el.de.el), dst = pl.sinotico.elementos.find(x => x.id === el.para.el);
         h += `<p class="nota">${esc(TIPOS_PORTA[el.tipo] ? TIPOS_PORTA[el.tipo].nome : '')}: de <b>${esc((ori && (ori.rotulo || SIMBOLOS[ori.s].nome)) || '?')}</b> para <b>${esc((dst && (dst.rotulo || SIMBOLOS[dst.s].nome)) || '?')}</b>. O tipo vem das portas.</p>
+            <label>Produto na linha <small>(cor e legenda)</small><select data-sinp="produto"><option value="">— sem produto (neutro)</option>${Object.entries(PRODUTOS).map(([k, P]) => `<option value="${k}"${el.produto === k ? ' selected' : ''}>${esc(P.nome)}</option>`).join('')}</select></label>
             <label class="check"><input type="checkbox" data-sinp="seta"${el.seta ? ' checked' : ''}> Seta no fim (sentido do fluxo)</label>
             <div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-sin="caminho-auto">Refazer o caminho automático</button></div>`;
     } else if (el.s === 'tubo') h += `<p class="aviso-inline">Linha solta (desenho antigo): não está presa a portas.</p><label>Tipo de linha <select data-sinp="estilo">${Object.entries(ESTILOS_TUBO).map(([k, n]) => `<option value="${k}"${(el.estilo || 'material') === k ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>

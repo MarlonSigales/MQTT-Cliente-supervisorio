@@ -364,6 +364,10 @@ teste('UBG de arroz (exemplo): kits por elemento, linhas tipadas, planta virtual
     ok(tops.includes('armazenagem/silo_1/metano') && tops.includes('engenho/elevador_do_despedregador/escorregamento') && tops.includes('engenho/elevador_do_despedregador/rotacao'), 'silo com metano; elevador com escorregamento e rotação');
     // toda linha liga saída → entrada do mesmo tipo
     pl.sinotico.elementos.filter(e => e.s === 'tubo').forEach(t => { const a = acharPorta(pl, t.de), b = acharPorta(pl, t.para); ok(a && b && a.io === 's' && b.io === 'e' && a.tipo === b.tipo && a.tipo === t.tipo, 'ligação ' + t.id); });
+    // produto em toda linha de material (cor e legenda), na ordem fixa da paleta
+    ok(pl.sinotico.elementos.filter(e => e.s === 'tubo' && e.tipo === 'material').every(e => PRODUTOS[e.produto]), 'linhas de material com produto');
+    igual(Object.values(PRODUTOS).map(p => p.cor).slice(0, 3), ['#2a78d6', '#eb6834', '#1baf7a']);
+    ok(htmlLegendaProdutos(pl).includes('Quebrados'), 'legenda');
     // a planta virtual cobre todos os tópicos medidos e todos os comandos
     const pub = new Set(pl.simulacao.modelos.flatMap(m => [m.topico, m.estado].filter(Boolean)));
     igual(tops.filter(t => !pub.has(t)), [], 'todo sensor tem modelo');

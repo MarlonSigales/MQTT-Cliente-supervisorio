@@ -2,7 +2,7 @@
 
 TODO / QA — Supervisório MQTT (cliente MQTT supervisório)
 Marcadores: [fazer] [futuro] [resolvido] [rejeitado] [parcial]
-Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
+Atualizado em 03/11/2026 (versão 6). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
 
 === DIRETRIZES PERMANENTES
 - SIMPLES PARA QUALQUER UM: um operador de unidade armazenadora tem que conseguir usar sem ler manual.
@@ -35,19 +35,19 @@ Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referên
    reconexão depois de derrubar o broker. Se der erro, anotar a mensagem que aparece no chip da conexão.
 25 [fazer] Testar a nuvem com a conta MEGA real da equipe (configuração, envio do histórico por dia e "trazer da nuvem").
    Feito e testado com um MEGA simulado (mesma interface do megajs); este ambiente não acessa o MEGA.
-26 [futuro] Perfis de acesso: operador (vê e reconhece), técnico (comanda), engenheiro (configura e liga controladores), com
+26 [resolvido na versão 6 (item 54)] Perfis de acesso: operador (vê e reconhece), técnico (comanda), engenheiro (configura e liga controladores), com
    senha local para comandos e configuração.
-27 [futuro] Mapa da termometria do silo: um sensor por cabo e por altura (tópicos silo1/cabo3/s5), com mapa de calor do
+27 [resolvido na versão 6 (item 55)] Mapa da termometria do silo: um sensor por cabo e por altura (tópicos silo1/cabo3/s5), com mapa de calor do
    silo, maior temperatura por cabo e alerta de "ponto quente" (aumento > x °C/dia), que é o que o armazenador mais olha.
-28 [futuro] Secagem por lote/receita: início e fim da carga, umidade de entrada e saída, consumo de lenha/GLP e energia por
+28 [resolvido na versão 6 (item 56)] Secagem por lote/receita: início e fim da carga, umidade de entrada e saída, consumo de lenha/GLP e energia por
    tonelada seca (indicador de eficiência), relatório por lote.
-29 [futuro] Agente de borda 24 h (Raspberry Pi, ESP32 ou Node-RED) rodando os mesmos controladores, horímetros e o envio do
+29 [resolvido na versão 6 (item 57)] Agente de borda 24 h (Raspberry Pi, ESP32 ou Node-RED) rodando os mesmos controladores, horímetros e o envio do
    histórico para o MEGA quando a página está fechada; o supervisório passa a ler o histórico dele. Hoje tudo depende de um
    computador com a página aberta (avisado na tela Nuvem e no relatório dos horímetros).
-30 [futuro] Tópicos em lote (um JSON com várias leituras, Sparkplug B), MQTT 5 e publicação QoS 2.
-31 [futuro] Funcionar sem internet como aplicativo instalável (PWA) e importar CSV de dados de outro sistema.
+30 [resolvido na versão 6 (item 58)] Tópicos em lote (um JSON com várias leituras, Sparkplug B), MQTT 5 e publicação QoS 2.
+31 [resolvido na versão 6 (item 59)] Funcionar sem internet como aplicativo instalável (PWA) e importar CSV de dados de outro sistema.
 38 [resolvido na versão 3] Tubulação que "gruda" nos bocais dos símbolos e acompanha quando o símbolo é movido.
-39 [futuro] Animação do material por produto (casca, farelo, quebrados, inteiros) nas linhas, como no simulador Garten Flow,
+39 [resolvido na versão 6 (item 60)] Animação do material por produto (casca, farelo, quebrados, inteiros) nas linhas, como no simulador Garten Flow,
    e cor de linha por produto (com legenda), mantendo o fundo neutro da ISA-101.
 
 === REJEITADO
@@ -180,7 +180,7 @@ Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referên
    não duplica). do_gemeo.json igual no sentido contrário. Configuração em planta.json, só quando muda. "Receber tudo"
    (e ao abrir como gêmeo): o original manda o dia todo e os dias anteriores vêm do histórico da nuvem. Tela mostra
    arquivos e bytes do dia. QA: teste de ida e volta refeito (buffer junta, leitor apaga, só mudanças, receber tudo).
-46 [futuro] Original como serviço (Node) para não depender de uma aba aberta; estimativa de cota por planta na tela.
+46 [resolvido na versão 6 (item 57)] Original como serviço (Node) para não depender de uma aba aberta; estimativa de cota por planta na tela.
 
 --- Versão 5 (29/10/2026) — UBG de arroz de exemplo no broker.emqx.io, status, sensores em todo elemento
 47 [resolvido] Exemplo UBG de arroz completa (destaque no Início): recebimento, pré-limpeza, secador + fornalha, 2 silos,
@@ -212,4 +212,36 @@ Atualizado em 29/10/2026 (versão 3). Os números são fixos (servem de referên
 53 [resolvido] Excluir planta direto da Visão geral (botão em cada cartão). Antes: só em Configurar, pedindo para digitar o
    nome exato (difícil com "—") e, na Visão geral, a tela não atualizava depois. Agora: confirmação simples com o que vai
    ser apagado; para a simulação, desliga o gêmeo e limpa os alarmes da planta. QA: excluir pela Visão geral, recarregar.
+
+--- Versão 6 (03/11/2026) — todos os itens [futuro] do todoQA (pedido "continuar, e executar todo")
+54 [resolvido] Perfis de acesso: operador (vê, reconhece, relatórios), técnico (+ comanda, conecta), engenheiro (+ configura,
+   sinótico, controle, nuvem, excluir). PIN de 4 a 8 números guardado como resumo SHA-256 com sal; volta para operador
+   após X min sem uso; telas trancadas com "Entrar com PIN"; 👤 no topo; log "acesso". Desligado = todos podem tudo.
+   Aviso na tela: protege contra engano na sala de controle; a proteção do campo é usuário/senha e ACL no broker.
+55 [resolvido] Termometria por cabos: base/caboN/sM (s1 embaixo), mapa de calor por silo (escala sequencial de um tom,
+   faixa ajustada às leituras), máximo por cabo, média da massa, sensores acima do nível ficam "no ar"; ponto quente =
+   subida acima de X °C/dia (24 h de histórico, ou extrapolado a partir de 2 h); alarmes de ponto quente e de limite;
+   histórico de cada sensor (7 dias) ao clicar. UBG: 2 silos × 5 cabos × 8 alturas, ponto quente no silo 2.
+56 [resolvido] Lotes de secagem: início/fim à mão ou automático pelo ventilador (desligado > 10 min encerra); resumo pelo
+   histórico: umidade média de entrada/saída, massa (integral da vazão ou informada), massa seca, água evaporada,
+   combustível (totalizador), energia (medidor ou integral da potência), por tonelada seca; relatório para imprimir/PDF
+   e CSV. UBG: vazão do secador e consumo de lenha simulados, lotes automáticos.
+57 [resolvido] Agente de borda 24 h (agente/agente.js, Node 22): mesmo código e mesmo arquivo de projeto, sem navegador;
+   histórico em disco (ZIP por dia, formato da nuvem) e retomada ao reiniciar; horímetros e estado em arquivo; MEGA
+   opcional (npm install megajs) e papel de original do gêmeo (--gemeo). Nuvem: estimativa kB/dia, MB/mês, GB/ano por
+   planta pelo último arquivo de dia. Doc em agente/LEIAME.md (com serviço systemd).
+58 [resolvido] Protocolo: MQTT 5 (opção por planta; motivos de recusa claros), publicar QoS 2 (PUBREC/PUBREL/PUBCOMP),
+   JSON com vários campos ("Criar uma variável por campo" no Descobrir) e Sparkplug B (leitura: BIRTH com nomes e
+   apelidos, DATA só com apelidos; Int/Long/Float/Double/Boolean/String). Broker de teste aceita MQTT 5 e QoS 2.
+59 [resolvido] Aplicativo instalável (manifest + service worker, abre sem internet; "Instalar como aplicativo" em Mais
+   opções) e importar CSV de outro sistema (largo ou longo; ; , ou tab; vírgula decimal; datas dd/mm/aaaa, ISO ou época;
+   casa cada coluna com a variável ou cria nova).
+60 [resolvido] Produto nas linhas: arroz em casca, integral, branco, quebrados, casca, farelo, impurezas/rejeito, com cor
+   fixa da paleta categórica validada (o vermelho fica para alarme) e legenda no sinótico; a linha anima quando o
+   equipamento de origem trabalha. Na UBG todas as linhas de material já vêm com o produto.
+   QA: 35 testes automáticos ok (perfis, termometria, lotes, lote/JSON/Sparkplug pela conexão, CSV, UBG com produtos);
+   agente contra broker local + planta virtual (2003 amostras no ZIP, retomada, gêmeo original com MEGA simulado);
+   cliente MQTT 3.1.1 e 5 contra o broker de teste (QoS 0/1/2, retidos, cancelar, recusa de senha em MQTT 5);
+   telas de termometria, lotes e sinótico em 1400/390 px sem rolagem lateral. Não testado: MEGA real, broker.emqx.io
+   (rede do ambiente de testes bloqueia) e instalação do app num celular.
 

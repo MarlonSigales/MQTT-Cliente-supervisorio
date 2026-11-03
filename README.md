@@ -30,6 +30,11 @@ Feito para unidades de pós-colheita e armazenagem, laboratórios e pequenas ind
 - **Exemplo UBG de arroz completa** funcionando no `broker.emqx.io`: a planta virtual publica todos os sensores, segue os
   comandos e responde ao **status** (`<prefixo>/status/get` → `<prefixo>/status` com todos os tópicos). Também roda sem
   navegador: `node campo/planta-virtual.js` (ver `campo/LEIAME.md`).
+- **Perfis de acesso** (operador, técnico, engenheiro) com PIN local.
+- **Termometria por cabos**: mapa de calor do silo, máximo por cabo e alerta de ponto quente (°C/dia).
+- **Lotes de secagem**: umidade de entrada e saída, água evaporada, combustível e kWh por tonelada seca, relatório por lote.
+- **Agente de borda 24 h** em Node (`agente/agente.js`): roda sem navegador, grava o histórico e envia ao MEGA.
+- **MQTT 5, QoS 2, JSON com vários campos e Sparkplug B**; **aplicativo instalável** que abre sem internet; **importar CSV**.
 - **Gêmeo pela nuvem**: o original (na rede da planta) sobrescreve a cada minuto um arquivo com o log do dia e o estado; o
   gêmeo, em outro lugar e sem broker, é um supervisório completo com esses dados e manda comandos por outro arquivo, que o
   original executa e confirma.

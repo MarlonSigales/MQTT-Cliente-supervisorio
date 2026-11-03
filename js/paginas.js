@@ -233,6 +233,7 @@ PAGINAS.sinotico = {
                 <button type="button" class="btn btn-secondary btn-sm" data-acao="sin-baixar">${icone('baixar')} SVG</button>
                 ${pl.sinotico.elementos.length ? '' : `<span class="nota">Desenho vazio: clique em "Editar desenho" ou use um modelo pronto no Início.</span>`}
             </div>
+            ${htmlLegendaProdutos(pl)}
             <div class="sin-layout${ed ? ' editando' : ''}">
                 ${ed ? `<aside class="sin-paleta" aria-label="Símbolos">${paleta}</aside>` : ''}
                 <div class="sin-palco" id="sin-palco"></div>

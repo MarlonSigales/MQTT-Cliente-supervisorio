@@ -111,19 +111,20 @@ MODELOS_PRONTOS.ubg_arroz = {
         [s1, s2].forEach(s => { s.eqObj.termometria = { ativo: true, cabos: 5, sensores: 8, base: `${topicoBaseEquip(pl, s.eqObj)}/termometria`, limite: 28, subidaDia: 2 }; });
         // ---- ligações porta a porta (o tipo da linha vem das portas)
         const P = (el, tipo, io, i = 0) => portasDoElemento(el).filter(p => p.tipo === tipo && p.io === io)[i].id;
-        const L = (a, ta, ia, c, tc, ic, meio) => b.liga(a, P(a, ta, 's', ia), c, P(c, tc || ta, 'e', ic || 0), a.eqObj, meio);
+        let prod = 'arroz_casca';   // produto das próximas linhas (cor e legenda)
+        const L = (a, ta, ia, c, tc, ic, meio) => { b.liga(a, P(a, ta, 's', ia), c, P(c, tc || ta, 'e', ic || 0), a.eqObj, meio); if (ta === 'material' || prod !== 'arroz_casca') pl.sinotico.elementos[pl.sinotico.elementos.length - 1].produto = ta === 'ar' && !['casca', 'farelo'].includes(prod) ? '' : prod; };
         L(cam, 'material', 0, moe); L(moe, 'material', 0, e1); L(e1, 'material', 0, pre); L(pre, 'material', 0, e2);
         L(e2, 'material', 0, sec); L(forn, 'ar', 0, sec); L(sec, 'ar', 0, vsec); L(sec, 'material', 0, e3); L(e3, 'material', 0, red);
         L(red, 'material', 0, s1); L(red, 'material', 1, s2); L(va1, 'ar', 0, s1); L(va2, 'ar', 0, s2);
         L(s1, 'material', 0, cor); L(s2, 'material', 0, cor); L(cor, 'material', 0, e4);
         L(e4, 'material', 0, pul, null, 0, [[1990, 290], [1990, 590], [85, 590]]);
         L(pul, 'material', 0, bfl); L(bfl, 'material', 0, lim); L(lim, 'material', 0, e5); L(e5, 'material', 0, ped);
-        L(ped, 'material', 0, des); L(des, 'material', 0, mar); L(mar, 'material', 1, des);
-        L(des, 'ar', 0, asp); L(asp, 'ar', 0, cic); L(cic, 'material', 0, bca);
-        L(mar, 'material', 0, e6); L(e6, 'material', 0, bru); L(bru, 'material', 0, pol);
-        L(bru, 'ar', 0, fil); L(pol, 'ar', 0, fil); L(fil, 'material', 0, bfa);
-        L(pol, 'material', 0, e7); L(e7, 'material', 0, tri); L(tri, 'material', 0, sel); L(tri, 'material', 1, bqu);
-        L(sel, 'material', 1, brj); L(sel, 'material', 0, e8); L(e8, 'material', 0, ens); L(ens, 'material', 0, bau);
+        L(ped, 'material', 0, des); prod = 'integral'; L(des, 'material', 0, mar); prod = 'arroz_casca'; L(mar, 'material', 1, des);
+        prod = 'casca'; L(des, 'ar', 0, asp); L(asp, 'ar', 0, cic); L(cic, 'material', 0, bca);
+        prod = 'integral'; L(mar, 'material', 0, e6); L(e6, 'material', 0, bru); prod = 'branco'; L(bru, 'material', 0, pol);
+        prod = 'farelo'; L(bru, 'ar', 0, fil); L(pol, 'ar', 0, fil); L(fil, 'material', 0, bfa);
+        prod = 'branco'; L(pol, 'material', 0, e7); L(e7, 'material', 0, tri); L(tri, 'material', 0, sel); prod = 'quebrados'; L(tri, 'material', 1, bqu);
+        prod = 'rejeito'; L(sel, 'material', 1, brj); prod = 'branco'; L(sel, 'material', 0, e8); L(e8, 'material', 0, ens); L(ens, 'material', 0, bau);
         // ---- ajustes de variáveis e comandos que o processo pede
         const T = (el, s) => pl.tags.find(t => t.equipId === el.eq && t.kitS === s);
         const C = (el, s) => pl.comandos.find(c => c.equipId === el.eq && c.kitS === s);

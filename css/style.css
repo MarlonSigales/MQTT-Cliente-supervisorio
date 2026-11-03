@@ -586,3 +586,13 @@ body.sin-desenhando .sin-svg.editando .sin-el:not(.sin-tubo) { cursor: crosshair
 .lote-resumo dl > div { background: var(--fundo); border: 1px solid var(--borda); border-radius: 8px; padding: 6px 10px; }
 .lote-resumo dt { font-size: .76rem; color: var(--suave); }
 .lote-resumo dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* produto nas linhas */
+.sin-tubo.com-produto .tubo-linha, .sin-tubo.com-produto.est-trabalhando .tubo-linha { stroke: var(--cor-produto); }
+.sin-tubo.tubo-ar.com-produto .tubo-fundo { stroke: var(--cor-produto); }
+.sin-tubo.tubo-ar.com-produto .tubo-linha { stroke: #f3f5f4; }
+.sin-tubo.com-produto.est-trabalhando .tubo-fluxo { stroke: rgba(255,255,255,.85); }
+.sin-tubo.tubo-ar.com-produto.est-trabalhando .tubo-fluxo { stroke: var(--cor-produto); stroke-width: 2; }
+.legenda-produtos { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font-size: .8rem; margin: 0 0 8px; }
+.legenda-produtos span { display: inline-flex; align-items: center; gap: 6px; }
+.legenda-produtos i { width: 22px; height: 6px; border-radius: 3px; display: inline-block; }
