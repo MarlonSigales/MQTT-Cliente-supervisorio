@@ -1,11 +1,13 @@
 /**
  * © 2026 Supervisório MQTT — Inova Agro UFPel EMBRAPII. Código aberto; cópias permitidas desde que citadas.
  *
- * CLIENTE MQTT 3.1.1 SOBRE WEBSOCKET, sem biblioteca externa. O navegador só fala MQTT por WebSocket:
+ * CLIENTE MQTT 3.1.1 E 5.0 SOBRE WEBSOCKET, sem biblioteca externa. O navegador só fala MQTT por WebSocket:
  * use a porta WebSocket do broker (EMQX: 8083 ws:// e 8084 wss://, caminho /mqtt; Mosquitto: a porta do "listener ... websockets").
  * Página aberta em https (GitHub Pages) só conecta em wss:// (o navegador bloqueia ws:// em página segura).
  *
- *  Recebe QoS 0, 1 e 2; publica QoS 0 e 1 (QoS 2 é enviado como 1). Reconecta sozinho e refaz as assinaturas.
+ *  Recebe e publica QoS 0, 1 e 2 (QoS 2: PUBREC → PUBREL → PUBCOMP, entrega uma vez só). Reconecta sozinho e refaz as
+ *  assinaturas. MQTT 5 (opção versao: 5): propriedades vazias na ida, lidas e ignoradas na volta; códigos de motivo
+ *  do broker viram mensagens claras.
  *  Last Will (LWT): ao cair, o broker publica "offline" em <prefixo>/supervisorio/status — o equipamento de campo
  *  pode usar isso para voltar ao modo seguro.
  *
@@ -17,7 +19,11 @@
 const MQTT_TIPO = { CONNECT: 1, CONNACK: 2, PUBLISH: 3, PUBACK: 4, PUBREC: 5, PUBREL: 6, PUBCOMP: 7, SUBSCRIBE: 8, SUBACK: 9,
     UNSUBSCRIBE: 10, UNSUBACK: 11, PINGREQ: 12, PINGRESP: 13, DISCONNECT: 14 };
 const MQTT_CONNACK = { 1: 'versão do protocolo recusada', 2: 'identificador do cliente recusado', 3: 'servidor indisponível',
-    4: 'usuário ou senha incorretos', 5: 'sem autorização' };
+    4: 'usuário ou senha incorretos', 5: 'sem autorização',
+    // MQTT 5 (códigos de motivo)
+    0x80: 'erro não especificado', 0x81: 'pacote malformado', 0x82: 'erro de protocolo', 0x84: 'versão do protocolo recusada (o broker não fala MQTT 5?)',
+    0x85: 'identificador do cliente recusado', 0x86: 'usuário ou senha incorretos', 0x87: 'sem autorização', 0x88: 'servidor indisponível',
+    0x89: 'servidor ocupado', 0x8A: 'cliente banido', 0x8C: 'método de autenticação errado', 0x95: 'pacote grande demais', 0x97: 'cota excedida' };
 
 const _enc = new TextEncoder(), _dec = new TextDecoder();
 
@@ -38,6 +44,9 @@ function topicoCasa(filtro, topico) {
 function mqttTexto(s) { const b = _enc.encode(String(s)); const o = new Uint8Array(2 + b.length); o[0] = b.length >> 8; o[1] = b.length & 255; o.set(b, 2); return o; }
 function mqttBytes(b) { const o = new Uint8Array(2 + b.length); o[0] = b.length >> 8; o[1] = b.length & 255; o.set(b, 2); return o; }
 function mqttU16(n) { return new Uint8Array([n >> 8, n & 255]); }
+function mqttVarint(x) { const o = []; do { let d = x % 128; x = Math.floor(x / 128); if (x > 0) d |= 128; o.push(d); } while (x > 0); return new Uint8Array(o); }
+function lerVarint(c, j) { let mult = 1, v = 0, b; do { b = c[j++]; v += (b & 127) * mult; mult *= 128; } while (b & 128 && j < c.length); return [v, j]; }
+const SEM_PROPS = new Uint8Array([0]);
 function juntar(partes) { const n = partes.reduce((s, p) => s + p.length, 0); const o = new Uint8Array(n); let k = 0; partes.forEach(p => { o.set(p, k); k += p.length; }); return o; }
 function mqttPacote(tipo, flags, corpo) {
     const tam = []; let x = corpo.length;
@@ -52,21 +61,23 @@ function paraBytes(payload) {
 }
 function pacoteConnect(o) {
     let flags = 0x02;
+    const v5 = o.versao === 5;
     const carga = [mqttTexto(o.clientId)];
-    if (o.will) { flags |= 0x04 | ((o.will.qos || 0) << 3) | (o.will.retain ? 0x20 : 0); carga.push(mqttTexto(o.will.topic), mqttBytes(paraBytes(o.will.payload))); }
+    if (o.will) { flags |= 0x04 | ((o.will.qos || 0) << 3) | (o.will.retain ? 0x20 : 0); if (v5) carga.push(SEM_PROPS); carga.push(mqttTexto(o.will.topic), mqttBytes(paraBytes(o.will.payload))); }
     if (o.usuario) { flags |= 0x80; carga.push(mqttTexto(o.usuario)); }
     if (o.usuario && o.senha) { flags |= 0x40; carga.push(mqttBytes(_enc.encode(o.senha))); }
-    return mqttPacote(MQTT_TIPO.CONNECT, 0, juntar([mqttTexto('MQTT'), new Uint8Array([4, flags]), mqttU16(o.keepalive || 30), ...carga]));
+    return mqttPacote(MQTT_TIPO.CONNECT, 0, juntar([mqttTexto('MQTT'), new Uint8Array([v5 ? 5 : 4, flags]), mqttU16(o.keepalive || 30), ...(v5 ? [SEM_PROPS] : []), ...carga]));
 }
-function pacotePublish(topico, payload, qos, retain, id, dup) {
+function pacotePublish(topico, payload, qos, retain, id, dup, versao = 4) {
     const partes = [mqttTexto(topico)];
     if (qos > 0) partes.push(mqttU16(id));
+    if (versao === 5) partes.push(SEM_PROPS);
     partes.push(paraBytes(payload));
     return mqttPacote(MQTT_TIPO.PUBLISH, (dup ? 8 : 0) | (qos << 1) | (retain ? 1 : 0), juntar(partes));
 }
 
 /** Lê pacotes completos de um buffer acumulado. Devolve { pacotes, resto }. */
-function lerPacotes(buf) {
+function lerPacotes(buf, versao = 4) {
     const pacotes = []; let i = 0;
     while (i < buf.length) {
         if (buf.length - i < 2) break;
@@ -74,34 +85,39 @@ function lerPacotes(buf) {
         do { if (k >= buf.length) return { pacotes, resto: buf.slice(i) }; b = buf[k++]; tam += (b & 127) * mult; mult *= 128; } while (b & 128);
         if (k + tam > buf.length) break;
         const tipo = buf[i] >> 4, flags = buf[i] & 15, corpo = buf.subarray(k, k + tam);
-        pacotes.push(decodificar(tipo, flags, corpo));
+        pacotes.push(decodificar(tipo, flags, corpo, versao));
         i = k + tam;
     }
     return { pacotes, resto: buf.slice(i) };
 }
-function decodificar(tipo, flags, c) {
+function decodificar(tipo, flags, c, versao = 4) {
     const u16 = j => (c[j] << 8) | c[j + 1];
+    const v5 = versao === 5;
+    const pularProps = j => { const [n, k] = lerVarint(c, j); return k + n; };
     const p = { tipo, flags };
     if (tipo === MQTT_TIPO.CONNACK) { p.sessao = c[0] & 1; p.codigo = c[1]; }
     else if (tipo === MQTT_TIPO.PUBLISH) {
         p.qos = (flags >> 1) & 3; p.retain = !!(flags & 1); p.dup = !!(flags & 8);
         const n = u16(0); p.topico = _dec.decode(c.subarray(2, 2 + n)); let j = 2 + n;
         if (p.qos > 0) { p.id = u16(j); j += 2; }
+        if (v5) j = pularProps(j);
         p.payload = c.slice(j);
-    } else if ([MQTT_TIPO.PUBACK, MQTT_TIPO.PUBREC, MQTT_TIPO.PUBREL, MQTT_TIPO.PUBCOMP, MQTT_TIPO.UNSUBACK].includes(tipo)) p.id = u16(0);
-    else if (tipo === MQTT_TIPO.SUBACK) { p.id = u16(0); p.codigos = [...c.subarray(2)]; }
+    } else if ([MQTT_TIPO.PUBACK, MQTT_TIPO.PUBREC, MQTT_TIPO.PUBREL, MQTT_TIPO.PUBCOMP].includes(tipo)) { p.id = u16(0); p.codigo = c.length > 2 ? c[2] : 0; }
+    else if (tipo === MQTT_TIPO.SUBACK || tipo === MQTT_TIPO.UNSUBACK) { p.id = u16(0); const j = v5 ? pularProps(2) : 2; p.codigos = [...c.subarray(j)]; }
+    else if (tipo === MQTT_TIPO.DISCONNECT) { p.codigo = c.length ? c[0] : 0; }
     else if (tipo === MQTT_TIPO.CONNECT) {
         // usado só pelo broker de teste (tests/broker-ws.js reaproveita este decodificador)
         let j = 0; const n = u16(j); j += 2 + n; p.nivel = c[j++]; const fl = c[j++]; p.keepalive = u16(j); j += 2;
+        if (p.nivel === 5) j = pularProps(j);
         const lerTxt = () => { const m = u16(j); const s = _dec.decode(c.subarray(j + 2, j + 2 + m)); j += 2 + m; return s; };
         const lerBin = () => { const m = u16(j); const s = c.slice(j + 2, j + 2 + m); j += 2 + m; return s; };
         p.clientId = lerTxt();
-        if (fl & 4) p.will = { topic: lerTxt(), payload: lerBin(), qos: (fl >> 3) & 3, retain: !!(fl & 0x20) };
+        if (fl & 4) { if (p.nivel === 5) j = pularProps(j); p.will = { topic: lerTxt(), payload: lerBin(), qos: (fl >> 3) & 3, retain: !!(fl & 0x20) }; }
         if (fl & 0x80) p.usuario = lerTxt();
         if (fl & 0x40) p.senha = _dec.decode(lerBin());
     } else if (tipo === MQTT_TIPO.SUBSCRIBE || tipo === MQTT_TIPO.UNSUBSCRIBE) {
-        p.id = u16(0); p.filtros = []; let j = 2;
-        while (j < c.length) { const m = u16(j); const f = _dec.decode(c.subarray(j + 2, j + 2 + m)); j += 2 + m; let q = 0; if (tipo === MQTT_TIPO.SUBSCRIBE) q = c[j++]; p.filtros.push({ f, q }); }
+        p.id = u16(0); p.filtros = []; let j = v5 ? pularProps(2) : 2;
+        while (j < c.length) { const m = u16(j); const f = _dec.decode(c.subarray(j + 2, j + 2 + m)); j += 2 + m; let q = 0; if (tipo === MQTT_TIPO.SUBSCRIBE) q = c[j++] & 3; p.filtros.push({ f, q }); }
     }
     return p;
 }
@@ -129,6 +145,7 @@ class ClienteMQTT extends Emissor {
         this.pendentes = new Map();            // id → { resolve, reject, pacote, t }
         this.recebidosQoS2 = new Set();
         this._id = 1; this._buf = new Uint8Array(0); this._tentativas = 0; this._fim = false;
+        this.v = this.o.versao === 5 ? 5 : 4;
         this.contagem = { rx: 0, tx: 0, bytesRx: 0, bytesTx: 0 };
     }
     _proxId() { this._id = (this._id % 65535) + 1; return this._id; }
@@ -176,7 +193,7 @@ class ClienteMQTT extends Emissor {
     _receber(bytes) {
         this.contagem.bytesRx += bytes.length;
         const b = new Uint8Array(this._buf.length + bytes.length); b.set(this._buf); b.set(bytes, this._buf.length);
-        const { pacotes, resto } = lerPacotes(b);
+        const { pacotes, resto } = lerPacotes(b, this.v);
         this._buf = resto;
         pacotes.forEach(p => this._tratar(p));
     }
@@ -211,20 +228,33 @@ class ClienteMQTT extends Emissor {
                 this.recebidosQoS2.delete(p.id);
                 this._enviar(mqttPacote(MQTT_TIPO.PUBCOMP, 0, mqttU16(p.id)));
                 break;
-            case MQTT_TIPO.PUBACK: case MQTT_TIPO.SUBACK: case MQTT_TIPO.UNSUBACK: {
+            case MQTT_TIPO.PUBREC: {           // QoS 2 (ida): o broker recebeu → libera (PUBREL) e espera o PUBCOMP
+                const pend = this.pendentes.get(p.id);
+                if (p.codigo >= 0x80) { if (pend) { this.pendentes.delete(p.id); pend.reject(new Error('o broker recusou a publicação: ' + (MQTT_CONNACK[p.codigo] || 'código ' + p.codigo))); } break; }
+                const rel = mqttPacote(MQTT_TIPO.PUBREL, 2, mqttU16(p.id));
+                if (pend) pend.pacote = rel;
+                this._enviar(rel);
+                break;
+            }
+            case MQTT_TIPO.PUBACK: case MQTT_TIPO.PUBCOMP: case MQTT_TIPO.SUBACK: case MQTT_TIPO.UNSUBACK: {
                 const pend = this.pendentes.get(p.id);
                 if (pend) {
                     this.pendentes.delete(p.id);
-                    if (p.tipo === MQTT_TIPO.SUBACK && p.codigos.some(c => c === 0x80)) pend.reject(new Error('o broker recusou a assinatura (sem permissão para o tópico?)'));
+                    if (p.tipo === MQTT_TIPO.SUBACK && p.codigos.some(c => c >= 0x80)) pend.reject(new Error('o broker recusou a assinatura (sem permissão para o tópico?)'));
+                    else if (p.tipo === MQTT_TIPO.PUBACK && p.codigo >= 0x80) pend.reject(new Error('o broker recusou a publicação: ' + (MQTT_CONNACK[p.codigo] || 'código ' + p.codigo)));
                     else pend.resolve(p);
                 }
                 break;
             }
+            case MQTT_TIPO.DISCONNECT:         // MQTT 5: o broker avisa por que está derrubando
+                this._recusa = 'o broker desconectou: ' + (MQTT_CONNACK[p.codigo] || 'código ' + p.codigo);
+                if (this.ws) this.ws.close();
+                break;
             default: break;
         }
     }
     _pacoteSubscribe(filtros, id = this._proxId()) {
-        return { id, bytes: mqttPacote(MQTT_TIPO.SUBSCRIBE, 2, juntar([mqttU16(id), ...filtros.flatMap(x => [mqttTexto(x.f), new Uint8Array([Math.min(2, x.q || 0)])])])) }.bytes;
+        return mqttPacote(MQTT_TIPO.SUBSCRIBE, 2, juntar([mqttU16(id), ...(this.v === 5 ? [SEM_PROPS] : []), ...filtros.flatMap(x => [mqttTexto(x.f), new Uint8Array([Math.min(2, x.q || 0)])])]));
     }
     _esperar(id, pacote) {
         return new Promise((resolve, reject) => {
@@ -236,22 +266,22 @@ class ClienteMQTT extends Emissor {
         this.assinaturas.set(filtro, qos);
         if (this.estado !== 'conectado') return Promise.resolve();
         const id = this._proxId();
-        const pac = mqttPacote(MQTT_TIPO.SUBSCRIBE, 2, juntar([mqttU16(id), mqttTexto(filtro), new Uint8Array([Math.min(2, qos)])]));
+        const pac = this._pacoteSubscribe([{ f: filtro, q: qos }], id);
         const pr = this._esperar(id, pac); this._enviar(pac); return pr;
     }
     cancelar(filtro) {
         this.assinaturas.delete(filtro);
         if (this.estado !== 'conectado') return Promise.resolve();
         const id = this._proxId();
-        const pac = mqttPacote(MQTT_TIPO.UNSUBSCRIBE, 2, juntar([mqttU16(id), mqttTexto(filtro)]));
+        const pac = mqttPacote(MQTT_TIPO.UNSUBSCRIBE, 2, juntar([mqttU16(id), ...(this.v === 5 ? [SEM_PROPS] : []), mqttTexto(filtro)]));
         const pr = this._esperar(id, pac); this._enviar(pac); return pr;
     }
-    /** Publica. QoS 1 resolve quando o broker confirma; desconectado rejeita (o comando não some em silêncio). */
+    /** Publica. QoS 1 resolve no PUBACK e QoS 2 no PUBCOMP; desconectado rejeita (o comando não some em silêncio). */
     publicar(topico, payload, o = {}) {
         if (this.estado !== 'conectado') return Promise.reject(new Error('sem conexão com o broker'));
-        const qos = Math.min(1, o.qos || 0);
+        const qos = Math.max(0, Math.min(2, o.qos || 0));
         const id = qos ? this._proxId() : 0;
-        const pac = pacotePublish(topico, payload, qos, !!o.retain, id);
+        const pac = pacotePublish(topico, payload, qos, !!o.retain, id, false, this.v);
         this.contagem.tx++;
         if (!qos) { this._enviar(pac); return Promise.resolve(); }
         const pr = this._esperar(id, pac); this._enviar(pac); return pr;
@@ -304,4 +334,4 @@ class ClienteLocal extends Emissor {
     encerrar() { this.broker.clientes.delete(this); this._mudar('desconectado', 'encerrado'); }
 }
 
-if (typeof module !== 'undefined') module.exports = { topicoCasa, lerPacotes, mqttPacote, mqttTexto, mqttU16, juntar, pacotePublish, MQTT_TIPO, paraBytes };
+if (typeof module !== 'undefined') module.exports = { topicoCasa, lerPacotes, mqttPacote, mqttTexto, mqttU16, mqttVarint, juntar, pacotePublish, MQTT_TIPO, paraBytes };

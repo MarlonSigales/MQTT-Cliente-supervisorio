@@ -469,6 +469,34 @@ teste('Lotes de secagem: massa pela vazão, massa seca, água, combustível e en
     ok(relatorioLoteHtml(pl, l).includes('Massa seca') && csvLotes(pl).includes('Teste'), 'relatório e CSV');
     SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
 });
+teste('Tópicos em lote: JSON com vários campos e Sparkplug B (BIRTH com apelidos, DATA só com apelidos)', async () => {
+    // decodificador contra o codificador
+    const b = codificarSparkplug([{ nome: 'Temperatura', alias: 1, tipo: 'Double', valor: 23.75 }, { nome: 'Motor/Ligado', alias: 2, tipo: 'Boolean', valor: true }, { nome: 'Contagem', alias: 3, tipo: 'Int32', valor: -5 }, { nome: 'Energia', alias: 4, tipo: 'Int64', valor: 123456789012 }, { nome: 'Pressao', alias: 5, tipo: 'Float', valor: 1.5 }], 7);
+    const d = decodificarSparkplug(b);
+    igual([d.seq, d.metricas.length, d.metricas[0].valor, d.metricas[1].valor, d.metricas[2].valor, d.metricas[3].valor, d.metricas[4].valor], [7, 5, 23.75, 1, -5, 123456789012, 1.5]);
+    igual(camposJson({ t1: 21.5, motor: { i: 8.2, on: true }, nome: 'x', v: [1, 2] }), ['t1', 'motor.i', 'motor.on', 'v[0]', 'v[1]']);
+    // pela conexão (broker da página): descobrir, criar uma variável por campo, receber
+    const pl = plantaEmBranco('Lote MQTT'); pl.conexao.tipo = 'simulado'; pl.conexao.prefixo = ''; SUP.p.plantas.push(pl); prepararPlanta(pl);
+    conectarPlanta(pl); await new Promise(r => setTimeout(r, 50));
+    descobrirTopicos(pl, '#');
+    const campo = new ClienteLocal({}); campo.conectar(); await new Promise(r => setTimeout(r, 80));
+    await campo.publicar('fazenda/clp1', JSON.stringify({ t_ar: 81.5, motor: { i: 12.3, on: 1 } }));
+    await campo.publicar('spBv1.0/ubg/DBIRTH/no1/secador', b);
+    await campo.publicar('spBv1.0/ubg/DDATA/no1/secador', codificarSparkplug([{ alias: 1, tipo: 'Double', valor: 24.5 }, { alias: 3, tipo: 'Int32', valor: 9 }], 8));
+    await new Promise(r => setTimeout(r, 50));
+    const desc = RT.descobertos.get(pl.id);
+    igual(desc.get('fazenda/clp1').campos, ['t_ar', 'motor.i', 'motor.on'], 'campos do JSON');
+    igual(desc.get('spBv1.0/ubg/DDATA/no1/secador').campos.length, 5, 'métricas do Sparkplug (pelo BIRTH)');
+    igual(criarTagsCampos(pl, 'fazenda/clp1'), 3); igual(criarTagsCampos(pl, 'spBv1.0/ubg/DDATA/no1/secador'), 5);
+    pararDescoberta(pl); prepararPlanta(pl); assinarTopicos(pl);
+    await campo.publicar('fazenda/clp1', JSON.stringify({ t_ar: 82, motor: { i: 12.5, on: 1 } }));
+    await campo.publicar('spBv1.0/ubg/DBIRTH/no1/secador', b);
+    await campo.publicar('spBv1.0/ubg/DDATA/no1/secador', codificarSparkplug([{ alias: 1, tipo: 'Double', valor: 25.25 }], 9));
+    await new Promise(r => setTimeout(r, 50));
+    const v = c => valorTag(pl.tags.find(t => t.caminhoJson === c).id);
+    igual([v('t_ar'), v('motor.i'), v('Temperatura'), v('Contagem'), v('Energia')], [82, 12.5, 25.25, -5, 123456789012], 'valores por campo e por apelido');
+    campo.encerrar(); desconectarPlanta(pl.id, true); SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
+});
 teste('Relatório: monta com os dados e escapa nomes', async () => {
     const pl = SUP.p.plantas[0];
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const t0 = d0.getTime() - 86400000;

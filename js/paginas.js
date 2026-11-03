@@ -503,7 +503,7 @@ PAGINAS.logs = {
                 <label>Planta (conexão) <select name="pl">${pls.map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select></label>
                 <label>Tópico <input type="text" name="topico" required placeholder="ex.: fazenda/ubs/secador/sp_t_ar"></label>
                 <label class="largo">Mensagem (payload) <textarea name="payload" rows="3" placeholder='ex.: 1   ou   {"valor": 75}'></textarea></label>
-                <label>QoS <select name="qos"><option>0</option><option selected>1</option></select></label>
+                <label>QoS <select name="qos"><option>0</option><option selected>1</option><option>2</option></select></label>
                 <label class="campo-inline"><input type="checkbox" name="retain"> Reter no broker (retain)</label>
                 <div class="largo botoes"><button type="submit" class="btn btn-primary">Publicar</button><span class="nota">O tópico é completo (o prefixo da planta não é acrescentado aqui). Fica registrado no log.</span></div></form>` : vazio('Crie uma planta primeiro.');
         } else {
@@ -516,8 +516,10 @@ PAGINAS.logs = {
                     ${linhas.some(([t]) => !jaUsados.has(t)) ? `<button type="button" class="btn btn-secondary btn-sm" data-acao="desc-criar-todos" data-pl="${pl.id}">Criar todas as novas</button>` : ''}</div></div>
                     <p class="nota">Assina <code>${esc(ativo ? RT.descobrindo.get(pl.id) : (pl.conexao.prefixo ? pl.conexao.prefixo + '/#' : '#'))}</code> e lista o que chega. O tipo (e o ícone) é adivinhado pelo nome do tópico; confira e troque em Configurar.</p>
                     ${linhas.length ? `<div class="tabela-rolagem"><table class="tabela"><thead><tr><th>Tópico</th><th>Última mensagem</th><th class="col-num">Msgs</th><th>Tipo sugerido</th><th></th></tr></thead><tbody>
-                    ${linhas.map(([t, d]) => `<tr><td><code>${esc(t)}</code></td><td class="pequeno">${esc(d.ultimo)}</td><td class="col-num">${d.n}</td><td>${icone(adivinharTipo(t))} ${esc(TIPOS_VAR[adivinharTipo(t)].nome)}</td>
-                        <td>${jaUsados.has(t) ? '<small>já é variável</small>' : `<button type="button" class="btn btn-secondary btn-sm" data-acao="desc-criar" data-pl="${pl.id}" data-t="${escAttr(t)}">Criar variável</button>`}</td></tr>`).join('')}</tbody></table></div>` : `<p class="nota">${ativo ? 'Aguardando mensagens…' : 'Nada descoberto ainda.'}</p>`}</section>`;
+                    ${linhas.map(([t, d]) => { const campos = d.campos || [], usadosC = new Set(pl.tags.filter(x => topicoCompleto(pl, x.topico) === t).map(x => x.caminhoJson)), novos = campos.filter(c => !usadosC.has(c));
+                        return `<tr><td><code>${esc(t)}</code>${campos.length > 1 ? `<br><small>${campos.length} campos: ${esc(campos.slice(0, 8).join(', '))}${campos.length > 8 ? '…' : ''}</small>` : ''}</td><td class="pequeno">${esc(d.ultimo)}</td><td class="col-num">${d.n}</td><td>${campos.length > 1 ? 'vários (um por campo)' : `${icone(adivinharTipo(t))} ${esc(TIPOS_VAR[adivinharTipo(t)].nome)}`}</td>
+                        <td>${campos.length > 1 ? (novos.length ? `<button type="button" class="btn btn-secondary btn-sm" data-acao="desc-criar-campos" data-pl="${pl.id}" data-t="${escAttr(t)}">Criar ${novos.length} variável(is), uma por campo</button>` : '<small>campos já são variáveis</small>') : jaUsados.has(t) ? '<small>já é variável</small>' : `<button type="button" class="btn btn-secondary btn-sm" data-acao="desc-criar" data-pl="${pl.id}" data-t="${escAttr(t)}">Criar variável</button>`}</td></tr>`; }).join('')}</tbody></table></div>` : `<p class="nota">${ativo ? 'Aguardando mensagens…' : 'Nada descoberto ainda.'}</p>`}
+                    ${ativo ? '' : `<div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="desc-iniciar" data-pl="${pl.id}" data-filtro="spBv1.0/#">Descobrir Sparkplug B (spBv1.0/#)</button><button type="button" class="btn btn-secondary btn-sm" data-acao="desc-iniciar" data-pl="${pl.id}" data-filtro="#">Descobrir tudo (#)</button></div>`}</section>`;
             }).join('') : vazio('Crie uma planta primeiro.');
         }
         return `<div class="container">${cabecalho(`${icone('logs')} Logs e MQTT`, 'Eventos guardados (conexões, comandos, controle, alarmes, horímetros) e o cliente MQTT: ver o que chega, publicar e descobrir tópicos.')}
@@ -563,6 +565,21 @@ async function carregarEventosLog() {
     const evs = await histEventos(Date.now() - 7 * 86400000, Date.now() + 1000, e => (!LOGS.tipo || e.tipo === LOGS.tipo) && (!f || (e.texto + ' ' + e.planta).toLowerCase().includes(f)), 400);
     alvo.innerHTML = evs.length ? `<div class="tabela-rolagem"><table class="tabela tabela-log"><thead><tr><th>Quando</th><th>Tipo</th><th>Planta</th><th>Evento</th></tr></thead><tbody>${evs.map(e => `<tr class="log-${esc(e.nivel)}"><td>${dataHora(e.t)}</td><td>${esc(e.tipo)}</td><td>${esc(e.planta)}</td><td>${esc(e.texto)}</td></tr>`).join('')}</tbody></table></div>${evs.length >= 400 ? '<p class="nota">Mostrando os 400 mais recentes; use o filtro ou baixe o CSV.</p>' : ''}` : '<p class="nota">Nenhum evento nos últimos 7 dias com este filtro.</p>';
 }
+/** Uma variável por campo do JSON (caminho) ou por métrica do Sparkplug B, no mesmo tópico. */
+function criarTagsCampos(pl, topico) {
+    const d = (RT.descobertos.get(pl.id) || new Map()).get(topico); if (!d) return 0;
+    const pre = String(pl.conexao.prefixo || '').replace(/\/+$/, '');
+    const rel = pre && topico.startsWith(pre + '/') ? topico.slice(pre.length + 1) : '/' + topico;
+    const ja = new Set(pl.tags.filter(x => topicoCompleto(pl, x.topico) === topico).map(x => x.caminhoJson));
+    let n = 0;
+    (d.campos || []).filter(c => !ja.has(c)).forEach(c => {
+        const tipo = adivinharTipo(c), base = topico.split('/').filter(x => !/^(spBv1\.0|NDATA|DDATA)$/.test(x)).slice(-1)[0];
+        const t = criarTag({ nome: `${c.replace(/[._/[\]]+/g, ' ').trim()} — ${base}`, tipo, topico: rel, caminhoJson: c });
+        pl.tags.push(t); n++;
+    });
+    garantirVariaveis(pl);
+    return n;
+}
 function criarTagDescoberta(pl, topico) {
     const pre = String(pl.conexao.prefixo || '').replace(/\/+$/, '');
     const rel = pre && topico.startsWith(pre + '/') ? topico.slice(pre.length + 1) : '/' + topico;
@@ -580,7 +597,8 @@ Object.assign(ACOES, {
     'mon-pausar': () => { LOGS.pausado = !LOGS.pausado; renderPagina(true); },
     'mon-limpar': () => { RT.monitor.length = 0; desenharMonitor(true); },
     'log-csv': async () => { const evs = await histEventos(Date.now() - 7 * 86400000, Date.now() + 1000); baixarArquivo(new Blob([csvDe(evs.reverse().map(e => [dataHora(e.t), e.tipo, e.nivel, e.planta, e.texto]), ['quando', 'tipo', 'nível', 'planta', 'evento'])], { type: 'text/csv' }), `eventos-${diaISO(Date.now())}.csv`); },
-    'desc-iniciar': b => { const pl = SUP.planta(b.dataset.pl); if (estadoConexao(pl.id) === 'desconectado') conectarPlanta(pl); const f = descobrirTopicos(pl); avisar(`Escutando ${f}…`); renderPagina(true); },
+    'desc-iniciar': b => { const pl = SUP.planta(b.dataset.pl); if (estadoConexao(pl.id) === 'desconectado') conectarPlanta(pl); const f = descobrirTopicos(pl, b.dataset.filtro); avisar(`Escutando ${f}…`); renderPagina(true); },
+    'desc-criar-campos': b => { const pl = SUP.planta(b.dataset.pl); const n = criarTagsCampos(pl, b.dataset.t); SUP.alterado('tag'); avisar(`${n} variável(is) criada(s), uma por campo. Confira tipos e unidades em Configurar.`); renderPagina(true); },
     'desc-parar': b => { pararDescoberta(SUP.planta(b.dataset.pl)); renderPagina(true); },
     'desc-criar': b => { const pl = SUP.planta(b.dataset.pl); const t = criarTagDescoberta(pl, b.dataset.t); SUP.alterado('tag'); avisar(`Variável "${t.nome}" criada (${TIPOS_VAR[t.tipo].nome}). Renomeie e confira em Configurar.`); renderPagina(true); },
     'desc-criar-todos': b => {

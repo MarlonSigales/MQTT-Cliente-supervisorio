@@ -40,7 +40,7 @@ for (const [k, v] of Object.entries(globais)) Object.defineProperty(globalThis, 
 const carregar = f => vm.runInThisContext(fs.readFileSync(path.join(raiz, f), 'utf8').replace(/^if \(typeof module !== 'undefined'\).*$/m, ''), { filename: f });
 carregar('lib/jszip.min.js');
 if (!globalThis.JSZip) { console.error('JSZip não carregou'); process.exit(1); }
-['js/dados.js', 'js/expr.js', 'js/mqtt.js', 'agente/hist-node.js', 'js/alarmes.js', 'js/controle.js', 'js/runtime.js', 'js/termometria.js', 'js/nuvem.js', 'js/gemeo.js', 'js/lotes.js'].forEach(carregar);
+['js/dados.js', 'js/expr.js', 'js/mqtt.js', 'js/sparkplug.js', 'agente/hist-node.js', 'js/alarmes.js', 'js/controle.js', 'js/runtime.js', 'js/termometria.js', 'js/nuvem.js', 'js/gemeo.js', 'js/lotes.js'].forEach(carregar);
 
 // ---------------------------------------------------------------- projeto
 const arqProj = arg('projeto');

@@ -107,8 +107,15 @@ function receber(pl, topico, bytes, info) {
     const txt = bytes.length > 300 ? _dec.decode(bytes.subarray(0, 300)) + '…' : _dec.decode(bytes);
     RT.monitor.push({ t, pl: pl.nome, plId: pl.id, dir: 'rx', topico, txt, qos: info.qos, retain: info.retain });
     if (RT.monitor.length > MONITOR_MAX) RT.monitor.splice(0, RT.monitor.length - MONITOR_MAX);
+    const sp = typeof lerSparkplug === 'function' && topico.startsWith('spBv1.0/') ? lerSparkplug(topico, bytes) : null;
     const desc = RT.descobertos.get(pl.id);
-    if (desc && RT.descobrindo.has(pl.id)) { const d = desc.get(topico) || { n: 0 }; d.n++; d.ultimo = txt; d.t = t; desc.set(topico, d); }
+    if (desc && RT.descobrindo.has(pl.id)) {
+        const k = sp ? sp.dados : topico, d = desc.get(k) || { n: 0, campos: [] }; d.n++; d.t = t;
+        const campos = sp ? [...sp.valores.keys()] : (typeof camposDaMensagem === 'function' ? camposDaMensagem(topico, bytes) : []);
+        d.campos = [...new Set([...(d.campos || []), ...campos])].slice(0, 80);
+        d.ultimo = sp ? `Sparkplug B ${sp.tipo}: ${[...sp.valores].slice(0, 6).map(([n, v]) => `${n}=${+v.toFixed(3)}`).join(', ')}${sp.valores.size > 6 ? '…' : ''}` : txt;
+        desc.set(k, d);
+    }
     // parâmetros de controladores por MQTT
     pl.controladores.forEach(c => {
         if (c.topicoParametros && topicoCompleto(pl, c.topicoParametros) === topico) {
@@ -116,10 +123,11 @@ function receber(pl, topico, bytes, info) {
             catch (e) { logar('controle', `${c.nome}: parâmetros recebidos inválidos — ${e.message}`, pl.nome, 'erro'); }
         }
     });
-    const tags = (RT.topicos.get(pl.id) || new Map()).get(topico);
+    const tags = (RT.topicos.get(pl.id) || new Map()).get(sp ? sp.dados : topico);
     if (!tags) { if (typeof termoReceber === 'function') termoReceber(pl, topico, bytes, t); return; }
     for (const tag of tags) {
-        const { v } = lerPayload(bytes, tag.caminhoJson);
+        if (sp && !sp.valores.has(tag.caminhoJson)) continue;           // métrica que não veio nesta mensagem
+        const { v } = sp ? { v: sp.valores.get(tag.caminhoJson) } : lerPayload(bytes, tag.caminhoJson);
         definirValor(pl, tag, Number.isFinite(v) ? v * num(tag.escala, 1) + num(tag.deslocamento, 0) : NaN, t, txt);
     }
     agendarTela();
@@ -135,7 +143,7 @@ function conectarPlanta(pl) {
         ? new ClienteLocal({})
         : new ClienteMQTT({
             url: c.url, clientId: (c.clientId || 'supervisorio') + '-' + Math.random().toString(16).slice(2, 7), usuario: c.usuario, senha: Senhas.de(pl.id),
-            keepalive: num(c.keepalive, 30),
+            keepalive: num(c.keepalive, 30), versao: num(c.versao, 4) === 5 ? 5 : 4,
             will: c.lwt ? { topic: (prefixo ? prefixo + '/' : '') + 'supervisorio/status', payload: 'offline', qos: 1, retain: true } : null
         });
     const reg = { cliente, estado: 'conectando', detalhe: '', desde: Date.now() };
@@ -177,7 +185,11 @@ function assinarTopicos(pl) {
     const r = RT.con.get(pl.id);
     if (!r) return;
     const quero = new Map();
-    pl.tags.filter(t => t.origem === 'mqtt' && t.topico).forEach(t => quero.set(topicoCompleto(pl, t.topico), Math.max(quero.get(topicoCompleto(pl, t.topico)) || 0, num(pl.conexao.qos, 0))));
+    pl.tags.filter(t => t.origem === 'mqtt' && t.topico).forEach(t => {
+        const k = topicoCompleto(pl, t.topico);
+        quero.set(k, Math.max(quero.get(k) || 0, num(pl.conexao.qos, 0)));
+        if (/^spBv1\.0\/[^/]+\/(N|D)DATA\//.test(k)) quero.set(topicoNascimentoSparkplug(k), 1);   // nomes e apelidos das métricas
+    });
     pl.controladores.filter(c => c.topicoParametros).forEach(c => quero.set(topicoCompleto(pl, c.topicoParametros), 1));
     pl.comandos.filter(c => c.tagEstado === '' && c.topico).forEach(() => {});
     const desc = RT.descobrindo.get(pl.id);
