@@ -497,6 +497,24 @@ teste('Tópicos em lote: JSON com vários campos e Sparkplug B (BIRTH com apelid
     igual([v('t_ar'), v('motor.i'), v('Temperatura'), v('Contagem'), v('Energia')], [82, 12.5, 25.25, -5, 123456789012], 'valores por campo e por apelido');
     campo.encerrar(); desconectarPlanta(pl.id, true); SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
 });
+teste('Importar CSV de outro sistema: largo e longo, vírgula decimal, datas brasileiras e ISO', async () => {
+    igual([numeroCsv('1.234,5'), numeroCsv('12,5'), numeroCsv('12.5'), numeroCsv('1,234.5'), numeroCsv('ligado'), numeroCsv('abc')].map(x => Number.isNaN(x) ? 'NaN' : x), [1234.5, 12.5, 12.5, 1234.5, 1, 'NaN']);
+    igual(dataCsv('03/11/2026 14:05:30'), new Date(2026, 10, 3, 14, 5, 30).getTime());
+    igual(dataCsv('2026-11-03 14:05'), new Date(2026, 10, 3, 14, 5, 0).getTime());
+    igual(dataCsv('1793700000'), 1793700000000);
+    const largo = analisarCsv('Data;Hora;Temperatura;Umidade relativa\n03/11/2026;10:00;21,5;70\n03/11/2026;10:01;21,7;69,5\n');
+    igual([largo.formato, largo.separador, [...largo.series.keys()], largo.series.get('Temperatura').map(p => p[1])], ['largo', ';', ['Temperatura', 'Umidade relativa'], [21.5, 21.7]]);
+    const longo = analisarCsv('timestamp,tag,value\n2026-11-03T10:00:00,TT101,30.5\n2026-11-03T10:00:00,PT102,1.2\n2026-11-03T10:01:00,TT101,30.9\n');
+    igual([longo.formato, longo.series.get('TT101').length, longo.series.get('PT102')[0][1]], ['longo', 2, 1.2]);
+    const pl = plantaEmBranco('CSV'); SUP.p.plantas.push(pl);
+    const t = criarTag({ nome: 'Temperatura', tipo: 'temperatura', topico: 'x/temperatura' }); pl.tags.push(t); garantirVariaveis(pl);
+    igual(casarSerie(pl, 'Temperatura').id, t.id, 'casa pelo nome');
+    const m = new Map([['Temperatura', t.id], ['Umidade relativa', 'nova']]);
+    igual(await importarSeries(pl, largo.series, m), 4);
+    igual((await histPontos(t.id, largo.de, largo.ate)).length, 2, 'foi para a variável certa');
+    ok(pl.tags.some(x => x.nome === 'Umidade relativa' && x.tipo === 'umidade'), 'variável nova com tipo adivinhado');
+    SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
+});
 teste('Relatório: monta com os dados e escapa nomes', async () => {
     const pl = SUP.p.plantas[0];
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const t0 = d0.getTime() - 86400000;

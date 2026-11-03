@@ -8,6 +8,8 @@
     <meta name="description" content="Supervisório MQTT no navegador: plantas, variáveis ao vivo, gráficos com zoom, alarmes ISA-18.2, horímetros, controle discreto, sinótico de pós-colheita e relatórios.">
     <link rel="icon" type="image/png" href="img/icone-instagri.png">
     <link rel="apple-touch-icon" href="img/icone-instagri-180.png">
+    <link rel="manifest" href="manifest.webmanifest">
+    <meta name="theme-color" content="#085357">
     <link rel="stylesheet" href="css/style.css?v=20261029f">
 </head>
 <body>
@@ -32,6 +34,7 @@
                     <a class="lnk" href="#/nuvem">☁ Nuvem da equipe</a>
                     <a class="lnk" href="tests/testes.html" target="_blank" rel="noopener">✓ Testes automáticos</a>
                     <button type="button" class="lnk" data-acao="tour">❓ Como usar (tour)</button>
+                    <button type="button" class="lnk" data-acao="instalar-app" id="btn-instalar" hidden>⬇ Instalar como aplicativo</button>
                 </div></details>
             </div>
         </aside>
@@ -80,6 +83,7 @@
     <script src="js/termometria.js?v=20261029f"></script>
     <script src="js/configurar.js?v=20261029f"></script>
     <script src="js/lotes.js?v=20261029f"></script>
+    <script src="js/importar.js?v=20261029f"></script>
     <script src="js/controle-ui.js?v=20261029f"></script>
     <script src="js/relatorio.js?v=20261029f"></script>
     <script src="js/acesso.js?v=20261029f"></script>

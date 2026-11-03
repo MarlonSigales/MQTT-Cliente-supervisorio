@@ -413,5 +413,14 @@ function iniciarApp() {
     // nuvem: entra sozinha se o navegador lembrar a senha (sem perguntar)
     if (emailLembrado()) nuvemGarantir(false).then(() => atualizarTopo()).catch(() => {});
     if (!SUP.p.plantas.length) setTimeout(() => mostrarTour(false), 800);
+    // aplicativo instalável: funciona sem internet (o broker da rede local continua acessível)
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(e => console.warn('service worker', e));
 }
+let _pedidoInstalar = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); _pedidoInstalar = e; const b = document.getElementById('btn-instalar'); if (b) b.hidden = false; });
+ACOES['instalar-app'] = async () => {
+    if (!_pedidoInstalar) { avisar('No celular: menu do navegador → "Adicionar à tela inicial". No computador: ícone de instalar na barra de endereço.', 'ok', 8000); return; }
+    _pedidoInstalar.prompt(); const r = await _pedidoInstalar.userChoice; _pedidoInstalar = null; $('#btn-instalar').hidden = true;
+    if (r && r.outcome === 'accepted') avisar('Instalado. Abra pelo ícone; sem internet ele abre do mesmo jeito.');
+};
 if (typeof window !== 'undefined' && !window.SUP_TESTES) document.addEventListener('DOMContentLoaded', iniciarApp);

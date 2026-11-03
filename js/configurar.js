@@ -286,7 +286,9 @@ PAGINAS.nuvem = {
                 <p class="nota">Último envio: ${NUVEM.ultimoEnvio ? dataHora(NUVEM.ultimoEnvio) : 'nenhum nesta sessão'}${NUVEM.ultimoErro ? ` · <span class="falta">erro: ${esc(NUVEM.ultimoErro)}</span>` : ''}. O envio só acontece com esta página aberta, ou com o <b>agente de borda</b> rodando 24 h num computador da unidade (<code>node agente/agente.js</code>, ver agente/LEIAME.md).</p>
                 <div class="botoes"><button type="button" class="btn btn-primary btn-sm" data-acao="nuvem-enviar-hist">${icone('nuvem')} Enviar agora</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-acao="nuvem-enviar-7">Reenviar os últimos 7 dias</button>
-                    <button type="button" class="btn btn-secondary btn-sm" data-acao="hist-importar-zip">📂 Importar arquivo de dia (.zip)</button></div>
+                    <button type="button" class="btn btn-secondary btn-sm" data-acao="hist-importar-zip">📂 Importar arquivo de dia (.zip)</button>
+                    <button type="button" class="btn btn-secondary btn-sm" data-acao="importar-csv" title="CSV de planilha, registrador ou outro sistema: uma coluna por variável ou variável e valor por linha">📥 Importar CSV de outro sistema</button></div>
+                <p class="nota">O CSV vai para a planta escolhida em "Trazer da nuvem" abaixo. Formatos: <code>data e hora; var1; var2…</code> ou <code>data e hora; variável; valor</code>.</p>
                 <h3>Trazer da nuvem para este navegador</h3>
                 <div class="grade-campos grade-estreita"><label>Planta <select id="nv-pl">${SUP.p.plantas.map(p => `<option value="${p.id}">${esc(p.nome)}</option>`).join('')}</select></label>
                     <label>De <input type="date" id="nv-de" value="${semana}"></label><label>Até <input type="date" id="nv-ate" value="${hoje}"></label></div>
