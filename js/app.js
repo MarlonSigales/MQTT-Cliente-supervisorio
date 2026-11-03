@@ -66,6 +66,7 @@ function confirmar(titulo, texto, { botao = 'Confirmar', perigo = false, campo =
 async function acionarComandoTela(pl, cmdId) {
     const cm = pl.comandos.find(c => c.id === cmdId);
     if (!cm) return;
+    if (typeof exigirPerfil === 'function' && !(await exigirPerfil('tecnico', cm.nome))) return;
     try {
         const gem = ehGemeo(pl), via = gem ? ' ao original pela nuvem (confirmação no próximo envio do original)' : '';
         if (!gem && estadoConexao(pl.id) !== 'conectado') throw new Error(`a planta "${pl.nome}" está sem conexão — conecte antes de comandar`);
@@ -106,6 +107,7 @@ function alvoRef(ref) {
     else if (tipo === 'op') obj = SUP.p.opcoes;
     else if (tipo === 'rel') obj = SUP.p.relatorio;
     else if (tipo === 'proj') obj = SUP.p;
+    else if (tipo === 'lote') { const [pid, lid] = String(id).split(':'); const pl = SUP.planta(pid); obj = pl && (pl.lotes || []).find(l => l.id === lid); }
     if (!obj) return null;
     const partes = caminho.split('.');
     for (let i = 0; i < partes.length - 1; i++) { if (obj[partes[i]] == null || typeof obj[partes[i]] !== 'object') obj[partes[i]] = {}; obj = obj[partes[i]]; }
@@ -153,7 +155,11 @@ document.addEventListener('click', async e => {
     const f = ACOES[b.dataset.acao];
     if (!f) return;
     e.preventDefault();
-    try { await f(b, e); }
+    try {
+        const min = typeof ACOES_PERFIL !== 'undefined' && ACOES_PERFIL[b.dataset.acao];
+        if (min && !(await exigirPerfil(min, (b.textContent || '').trim().slice(0, 60)))) return;
+        await f(b, e);
+    }
     catch (er) { console.error(er); if (er && er.message !== 'Entrada na nuvem cancelada.') avisar(er.message || String(er), 'erro', 7000); }
 });
 
@@ -198,7 +204,10 @@ document.addEventListener('scroll', esconderBalaoTag, { passive: true });
 function itensMenu() {
     const itens = [['inicio', 'Visão geral', 'inicio']];
     SUP.p.plantas.forEach(pl => itens.push(['planta/' + pl.id, pl.nome, 'planta', pl.id]));
-    itens.push(['sinotico', 'Sinótico', 'sinotico'], ['graficos', 'Gráficos', 'graficos'], ['alarmes', 'Alarmes e avisos', 'alarmes'], ['logs', 'Logs e MQTT', 'logs'],
+    itens.push(['sinotico', 'Sinótico', 'sinotico'], ['graficos', 'Gráficos', 'graficos'], ['alarmes', 'Alarmes e avisos', 'alarmes'],
+        ...(typeof termoEquipamentos === 'function' && SUP.p.plantas.some(pl => termoEquipamentos(pl).length) ? [['termometria', 'Termometria', 'temperatura']] : []),
+        ...(typeof lotesAtivo === 'function' && SUP.p.plantas.some(lotesAtivo) ? [['lotes', 'Lotes de secagem', 'umidade_grao']] : []),
+        ['logs', 'Logs e MQTT', 'logs'],
         ['controle', 'Controle', 'controle'], ['horimetros', 'Horímetros e energia', 'horimetro'], ['relatorios', 'Relatórios', 'relatorio'],
         ['configurar', 'Configurar', 'configurar'], ['nuvem', 'Nuvem da equipe', 'nuvem']);
     return itens;
@@ -216,6 +225,7 @@ function renderMenu() {
     atualizarTopo();
 }
 function atualizarTopo() {
+    const tp = $('#topo-perfil'); if (tp && typeof htmlChipPerfil === 'function') { const h = htmlChipPerfil(); if (tp.innerHTML !== h) tp.innerHTML = h; }
     const c = contagemAlarmes();
     const b = $('#topo-alarmes');
     if (b) {
@@ -253,6 +263,8 @@ function renderPagina(manterRolagem = false) {
     if (App._limpar) { try { App._limpar(); } catch (e) { /* ok */ } App._limpar = null; }
     esconderBalaoTag();
     const raiz = $('#app');
+    const minPag = typeof PAGINAS_PERFIL !== 'undefined' && PAGINAS_PERFIL[App.rota];
+    if (minPag && !temPerfil(minPag)) { raiz.innerHTML = htmlTrancado(minPag); renderMenu(); App.pagina = { titulo: P.titulo }; return; }
     try { raiz.innerHTML = P.render(App.param); }
     catch (e) { console.error(e); raiz.innerHTML = `<div class="container"><div class="card"><h2>Algo deu errado nesta tela</h2><p class="nota">${esc(e.message)}</p></div></div>`; }
     renderMenu();

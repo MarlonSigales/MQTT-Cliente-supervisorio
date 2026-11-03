@@ -408,6 +408,67 @@ teste('Sensores: todo elemento tem o ponto dos sensores; ligar o sensor nele pre
     ok(n > 5 && !pl.tags.some(x => x.equipId === el.eq) && !pl.sinotico.elementos.some(x => x.s === 'tubo'), 'excluído por inteiro');
     SUP.p = projeto;
 });
+teste('Perfis de acesso: PIN com resumo, níveis, telas e ações protegidas', async () => {
+    const antes = JSON.stringify(SUP.p.acesso);
+    SUP.p.acesso = { ativo: false, sal: '', pins: {}, saidaMin: 15 };
+    ok(temPerfil('engenheiro'), 'perfis desligados: todos podem tudo');
+    let erro = ''; try { await definirPin('tecnico', '12a'); } catch (e) { erro = e.message; } ok(/4 a 8/.test(erro), 'PIN inválido recusado');
+    await definirPin('tecnico', '1234'); await definirPin('engenheiro', '987654');
+    ok(!JSON.stringify(SUP.p.acesso).includes('987654') && SUP.p.acesso.pins.engenheiro.length === 64, 'guarda só o resumo');
+    ok(await conferirPin('engenheiro', '987654') && !(await conferirPin('engenheiro', '1234')), 'confere o PIN');
+    SUP.p.acesso.ativo = true; definirPerfil('operador');
+    ok(!temPerfil('tecnico') && temPerfil('operador'), 'operador não comanda');
+    igual([ACOES_PERFIL.comando, ACOES_PERFIL['sin-editar'], PAGINAS_PERFIL.configurar], ['tecnico', 'engenheiro', 'engenheiro']);
+    ok(!ACOES_PERFIL.reconhecer, 'operador reconhece alarme');
+    definirPerfil('tecnico'); ok(temPerfil('tecnico') && !temPerfil('engenheiro'), 'técnico comanda mas não configura');
+    ok(htmlTrancado('engenheiro').includes('Entrar com PIN'));
+    const n = normalizarProjeto(JSON.parse(JSON.stringify(SUP.p)));
+    ok(n.acesso.ativo && n.acesso.pins.tecnico, 'perfis sobrevivem ao salvar/abrir');
+    SUP.p.acesso = JSON.parse(antes); definirPerfil('operador');
+});
+teste('Termometria: mapa por cabo e altura, sensores no ar, ponto quente por subida em °C/dia', async () => {
+    const projeto = SUP.p;
+    const pl = plantaEmBranco('Termo'); pl.conexao.prefixo = 'fz'; SUP.p = criarProjetoVazio(); SUP.p.plantas.push(pl);
+    const S = SIMBOLOS.silo, el = { id: uid('el'), s: 'silo', x: 0, y: 0, w: S.w, h: S.h, rotulo: 'Silo', tags: [] };
+    aplicarKitSimbolo(pl, el, S); const eq = SUP.equipamento(el.eq);
+    eq.termometria = { ativo: true, cabos: 3, sensores: 4, base: 'area_1/silo_1/termometria', limite: 28, subidaDia: 2 };
+    igual(termoFiltros(pl), ['fz/area_1/silo_1/termometria/+/+']);
+    const enc = v => new TextEncoder().encode(String(v)), agora = Date.now();
+    for (let c = 1; c <= 3; c++) for (let s = 1; s <= 4; s++) ok(termoReceber(pl, `fz/area_1/silo_1/termometria/cabo${c}/s${s}`, enc(20 + c + s / 10), agora), 'reconhece o tópico');
+    ok(!termoReceber(pl, 'fz/outra/coisa', enc(1), agora), 'outros tópicos passam');
+    let r = termoResumo(pl, eq);
+    igual([r.lidos, r.max.c, r.max.s, +r.max.v.toFixed(1)], [12, 3, 4, 23.4], 'maior no cabo 3, altura 4');
+    const niv = pl.tags.find(t => t.equipId === eq.id && t.kitS === 'nivel'); RT.v.set(niv.id, { v: 50, t: agora, q: 'ok' });
+    ok(termoNoAr(pl, eq, 4) && !termoNoAr(pl, eq, 2), 'acima de 50 % está no ar');
+    r = termoResumo(pl, eq); igual(r.max.s, 2, 'o máximo ignora o ar');
+    // subida: o cabo 2, altura 1 estava 3 °C mais frio há 12 h → 6 °C/dia → ponto quente
+    await histImportar([{ g: `termo:${eq.id}:2:1`, t: agora - 12 * 3600000, v: 22.1 - 3 }]);
+    await termoCiclo();
+    perto(TERMO.subida.get(`${eq.id}:2:1`), 6, 0.2, 'subida em °C/dia');
+    ok([...ALM.ativos.values()].some(a => a.alvo === 'termo:' + eq.id && /ponto quente no cabo 2, altura 1/.test(a.texto)), 'alarme de ponto quente');
+    ok(svgTermoMapa(pl, eq).includes('termo-cel quente'), 'mapa marca a célula');
+    [...ALM.ativos.keys()].forEach(k => { if (k.includes('termo:')) ALM.ativos.delete(k); });
+    SUP.p = projeto;
+});
+teste('Lotes de secagem: massa pela vazão, massa seca, água, combustível e energia por tonelada', async () => {
+    const pl = plantaEmBranco('Lote'); SUP.p.plantas.push(pl);
+    const mk = (nome, tipo) => { const t = criarTag({ nome, tipo, topico: nome }); pl.tags.push(t); return t; };
+    const ue = mk('ue', 'umidade_grao'), us = mk('us', 'umidade_grao'), vz = mk('vz', 'vazao'), cb = mk('cb', 'volume'), po = mk('po', 'potencia');
+    pl.secagem = { ativo: true, tagUgEnt: ue.id, tagUgSai: us.id, tagVazao: vz.id, tagComb: cb.id, unComb: 'm³', tagPotencia: po.id };
+    const t0 = Date.now() - 3 * 3600000, am = [];
+    for (let k = 0; k <= 180; k++) { const t = t0 + k * 60000; am.push({ g: ue.id, t, v: 20 }, { g: us.id, t, v: 13 }, { g: vz.id, t, v: 30 }, { g: cb.id, t, v: 100 + k * 0.01 }, { g: po.id, t, v: 15 }); }
+    await histImportar(am);
+    const l = iniciarLote(pl, 'Teste', t0);
+    let erro = ''; try { iniciarLote(pl); } catch (e) { erro = e.message; } ok(/aberto/.test(erro), 'um lote aberto por vez');
+    await encerrarLote(pl, t0 + 3 * 3600000);
+    const r = l.resumo;
+    perto(r.horas, 3, 0.01, 'horas'); perto(r.massaUmida, 90, 0.5, 'massa pela vazão (30 t/h × 3 h)');
+    perto(r.massaSeca, 90 * 80 / 87, 0.5, 'massa seca'); perto(r.agua, (90 - 90 * 80 / 87) * 1000, 600, 'água evaporada');
+    perto(r.comb, 1.8, 0.01, 'combustível pelo totalizador'); perto(r.energia, 45, 0.5, 'energia pela potência');
+    perto(r.kwhPorT, 45 / (90 * 80 / 87), 0.05, 'kWh por t seca');
+    ok(relatorioLoteHtml(pl, l).includes('Massa seca') && csvLotes(pl).includes('Teste'), 'relatório e CSV');
+    SUP.p.plantas = SUP.p.plantas.filter(x => x !== pl);
+});
 teste('Relatório: monta com os dados e escapa nomes', async () => {
     const pl = SUP.p.plantas[0];
     const d0 = new Date(); d0.setHours(0, 0, 0, 0); const t0 = d0.getTime() - 86400000;

@@ -548,3 +548,41 @@ body.sin-desenhando .sin-svg.editando .sin-el:not(.sin-tubo) { cursor: crosshair
 .exemplo-destaque .botoes { flex-direction: column; align-items: stretch; }
 .selo { display: inline-block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: #fff; background: var(--teal); padding: 2px 8px; border-radius: 999px; }
 @media (max-width: 700px) { .exemplo-destaque { grid-template-columns: 1fr; } }
+
+/* perfis */
+.topo-perfil { cursor: pointer; border: 1px solid var(--borda); background: #fff; }
+.topo-perfil.perfil-tecnico { border-color: var(--verde); }
+.topo-perfil.perfil-engenheiro { border-color: var(--teal); background: var(--verde-claro); }
+.trancado { max-width: 640px; margin: 40px auto; text-align: left; }
+
+/* termometria */
+.termo-topo { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.termo-topo .stat { background: var(--superficie); border: 1px solid var(--borda); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.termo-topo .stat small, .termo-topo .stat span { color: var(--suave); font-size: .8rem; }
+.termo-topo .stat b { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.termo-topo .stat-alerta { border-color: #c2570c; }
+.termo-area { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
+.termo-svg { overflow-x: auto; max-width: 100%; }
+.termo-mapa text { font-size: 12px; font-variant-numeric: tabular-nums; }
+.termo-mapa .termo-eixo { fill: var(--suave); font-size: 11px; }
+.termo-mapa .termo-max { fill: var(--texto); font-size: 11px; font-weight: 600; }
+.termo-cel { cursor: pointer; }
+.termo-cel:hover rect, .termo-cel:focus rect { stroke: var(--texto); stroke-width: 1.5; }
+.termo-cel.quente rect { stroke: #b3261e; stroke-width: 3; }
+.termo-cel.no-ar rect { fill: url(#none); opacity: .55; }
+.termo-lado { flex: 1 1 280px; min-width: 260px; }
+.termo-lista { margin: 0 0 12px; padding-left: 18px; font-size: .88rem; }
+.termo-legenda { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 2px; margin-top: 12px; font-size: .78rem; color: var(--suave); }
+.termo-legenda > span:not(.termo-leg-item) { width: 26px; height: 12px; border-radius: 2px; }
+.termo-legenda small { margin: 0 8px 0 4px; }
+.termo-leg-item { display: inline-flex; align-items: center; gap: 4px; margin-left: 12px; }
+.termo-leg-item i { width: 14px; height: 12px; border-radius: 2px; display: inline-block; }
+.leg-quente { border: 3px solid #b3261e; } .leg-ar { background: var(--grade); }
+.termo-linha { width: 100%; max-width: 360px; }
+.termo-linha text { font-size: 10px; fill: var(--suave); } .termo-linha .eixo { stroke: var(--grade); }
+
+/* lotes de secagem */
+.lote-resumo dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin: 8px 0 12px; }
+.lote-resumo dl > div { background: var(--fundo); border: 1px solid var(--borda); border-radius: 8px; padding: 6px 10px; }
+.lote-resumo dt { font-size: .76rem; color: var(--suave); }
+.lote-resumo dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }

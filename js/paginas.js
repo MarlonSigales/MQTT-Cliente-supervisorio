@@ -491,7 +491,7 @@ PAGINAS.logs = {
         const abas = [['eventos', 'Eventos'], ['monitor', 'Monitor MQTT'], ['publicar', 'Publicar'], ['descobrir', 'Descobrir tópicos']];
         let corpo = '';
         if (LOGS.aba === 'eventos') {
-            corpo = `<div class="barra-filtro"><select id="log-tipo" aria-label="Tipo"><option value="">Todos os tipos</option>${['conexao', 'comando', 'controle', 'publicacao', 'alarme', 'estado', 'horimetro', 'nuvem', 'config', 'sistema'].map(t => `<option${LOGS.tipo === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
+            corpo = `<div class="barra-filtro"><select id="log-tipo" aria-label="Tipo"><option value="">Todos os tipos</option>${['conexao', 'comando', 'controle', 'publicacao', 'alarme', 'estado', 'horimetro', 'nuvem', 'acesso', 'config', 'sistema'].map(t => `<option${LOGS.tipo === t ? ' selected' : ''}>${t}</option>`).join('')}</select>
                 <input type="search" id="log-filtro" placeholder="Procurar no texto" value="${escAttr(LOGS.filtro)}">
                 <button type="button" class="btn btn-secondary btn-sm" data-acao="log-csv">${icone('baixar')} CSV (7 dias)</button></div><div id="log-lista"></div>`;
         } else if (LOGS.aba === 'monitor') {

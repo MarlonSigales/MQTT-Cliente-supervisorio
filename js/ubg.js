@@ -102,6 +102,13 @@ MODELOS_PRONTOS.ubg_arroz = {
         const mapa = [...troca].map(([t, v]) => [v, t.variavel]).filter(([v, n]) => v && v !== n).sort((a, b) => b[0].length - a[0].length);
         pl.tags.forEach(t => { if (t.expr) mapa.forEach(([v, n]) => { t.expr = t.expr.replace(new RegExp(`\\b${v}\\b`, 'g'), n); }); });
         atualizarTopicosAuto(pl);
+        // termometria por cabos: 5 cabos × 8 alturas em cada silo (base/caboN/sM)
+        // secador: vazão de grãos; fornalha: consumo de lenha (totalizador) — para os lotes de secagem
+        const novaKit = (el, s, p) => { const eq = el.eqObj; const t = criarTag(Object.assign({ topico: `${topicoBaseEquip(pl, eq)}/${s}`, equipId: eq.id, areaId: eq.areaId }, p)); t.topicoAuto = true; t.kitS = s; pl.tags.push(t); return t; };
+        novaKit(sec, 'vazao', { nome: 'Vazão de grãos — Secador', tipo: 'vazao', unidade: 't/h', faixa: [0, 80] });
+        novaKit(forn, 'lenha_total', { nome: 'Consumo de lenha (totalizador) — Fornalha', tipo: 'volume', unidade: 'm³', dec: 2, faixa: [0, 100000] });
+        garantirVariaveis(pl);
+        [s1, s2].forEach(s => { s.eqObj.termometria = { ativo: true, cabos: 5, sensores: 8, base: `${topicoBaseEquip(pl, s.eqObj)}/termometria`, limite: 28, subidaDia: 2 }; });
         // ---- ligações porta a porta (o tipo da linha vem das portas)
         const P = (el, tipo, io, i = 0) => portasDoElemento(el).filter(p => p.tipo === tipo && p.io === io)[i].id;
         const L = (a, ta, ia, c, tc, ic, meio) => b.liga(a, P(a, ta, 's', ia), c, P(c, tc || ta, 'e', ic || 0), a.eqObj, meio);
@@ -192,13 +199,24 @@ MODELOS_PRONTOS.ubg_arroz = {
         add({ nome: 't_exaust', tipo: 'alg', expr: 't_ext + 0.3 * (t_ar - t_ext)', topico: top(T(sec, 't_exaustao')), ruido: 0.2, dec: 1 });
         add({ nome: 'ur_exaust', tipo: 'alg', expr: 'min(98, 88 - 0.25 * (t_ar - 40))', topico: top(T(sec, 'ur_exaustao')), ruido: 0.5, dec: 1 });
         add({ nome: 'faisca', tipo: 'alg', expr: '0', topico: top(T(sec, 'faisca')), dec: 0 });
+        add({ nome: 'vazao_sec', tipo: 'alg', expr: `q_rec * ${nomeM(vsec)}`, topico: top(T(sec, 'vazao')), ruido: 0.3, dec: 1, min: 0 });
+        add({ nome: 'lenha', tipo: 'din', deriv: `${nomeM(vsec)} * (0.25 + 0.004 * sp_t_ar) / 3600`, inicial: 1834.2, topico: top(T(forn, 'lenha_total')), dec: 3 });
         add({ nome: 't_forn', tipo: 'din', deriv: `(se(${nomeM(vsec)} == 1, 300 + 4.5 * sp_t_ar, 180) - x) / 120`, inicial: 650, topico: top(T(forn, 'temperatura')), ruido: 2, dec: 0 });
         add({ nome: 'depressao', tipo: 'alg', expr: `-35 * ${nomeM(vsec)} + 2`, topico: top(T(forn, 'depressao')), ruido: 1, dec: 0 });
         add({ nome: 'o2_fumos', tipo: 'alg', expr: `se(${nomeM(vsec)} == 1, 9 + onda(300), 20.9)`, topico: top(T(forn, 'o2_fumos')), ruido: 0.1, dec: 1 });
         // silos (termometria, gases, umidade)
         [[s1, 0, 'nivel_s1'], [s2, 1, 'nivel_s2']].forEach(([s, i, niv]) => {
             const k = 's' + (i + 1), tmax = `${k}_tmax`;
-            add({ nome: tmax, tipo: 'alg', expr: `${i ? 26.5 : 22.5} + 1.2 * onda(${7200 + i * 900})`, topico: top(T(s, 'temp_max')), ruido: 0.05, dec: 1 });
+            // cabos: mais quente no meio da massa e no cabo central; no silo 2 um ponto quente no cabo 3, altura 4, subindo ~3 °C/dia
+            const nomes = [];
+            for (let c = 1; c <= 5; c++) for (let h = 1; h <= 8; h++) {
+                const nm = `${k}_c${c}s${h}`; nomes.push(nm);
+                const basev = (i ? 24.5 : 20.5) + 1.6 * Math.sin(Math.PI * h / 9) + (c === 3 ? 0.8 : 0) - 0.2 * Math.abs(c - 3);
+                const quente = i === 1 && c === 3 && (h === 4 || h === 5);
+                if (quente) add({ nome: nm, tipo: 'din', deriv: h === 4 ? '3 / 86400' : '1.8 / 86400', inicial: h === 4 ? 29.4 : 28.1, max: 45, topico: `${s.eqObj.termometria.base}/cabo${c}/s${h}`, ruido: 0.04, dec: 1 });
+                else add({ nome: nm, tipo: 'alg', expr: `${basev.toFixed(2)} + 0.6 * onda(${7200 + c * 600 + h * 97})`, topico: `${s.eqObj.termometria.base}/cabo${c}/s${h}`, ruido: 0.04, dec: 1 });
+            }
+            add({ nome: tmax, tipo: 'alg', expr: `max(${nomes.join(', ')})`, topico: top(T(s, 'temp_max')), dec: 1 });
             add({ nome: `${k}_tmed`, tipo: 'alg', expr: `${tmax} - 3`, topico: top(T(s, 'temp_media')), ruido: 0.05, dec: 1 });
             add({ nome: `${k}_tmin`, tipo: 'alg', expr: `${tmax} - 6.5`, topico: top(T(s, 'temp_min')), ruido: 0.05, dec: 1 });
             add({ nome: `${k}_tesp`, tipo: 'alg', expr: 't_ext + 3', topico: top(T(s, 'temp_espaco')), ruido: 0.1, dec: 1 });
@@ -253,6 +271,10 @@ MODELOS_PRONTOS.ubg_arroz = {
             add({ nome: 'x_' + baseTopico(t.topico), tipo: 'alg', expr: t.tipo === 'estado' ? '0' : String(+(f[0] + (f[1] - f[0]) * 0.3).toFixed(2)), topico: t.topico, ruido: t.tipo === 'estado' ? 0 : +((f[1] - f[0]) * 0.002).toFixed(3), dec: t.dec != null ? t.dec : 2 });
         });
         pl.simulacao = { modelos: M, periodoS: 2 };
+        // lotes de secagem: abre e fecha sozinho pelo ventilador do secador
+        pl.secagem = { ativo: true, eqId: sec.eq, tagUgEnt: T(sec, 'ug_entrada').id, tagUgSai: T(sec, 'ug_saida').id, tagVazao: T(sec, 'vazao').id, tagComb: T(forn, 'lenha_total').id, unComb: 'm³ de lenha',
+            tagPotencia: T(vsec, 'potencia').id, tagTar: T(sec, 't_ar').id, tagTmassa: T(sec, 't_massa').id, auto: true, tagEstado: T(vsec, 'estado').id };
+        pl.lotes = [];
         return pl;
     }
 };

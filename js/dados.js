@@ -128,7 +128,8 @@ function criarProjetoVazio() {
             nuvemIntervaloMin: 30,
             graficosSalvos: []
         },
-        relatorio: { empresa: '', responsavel: '', observacoes: '' }
+        relatorio: { empresa: '', responsavel: '', observacoes: '' },
+        acesso: { ativo: false, sal: '', pins: {}, saidaMin: 15 }      // perfis (acesso.js)
     };
 }
 
@@ -215,6 +216,7 @@ function normalizarProjeto(d) {
     p.opcoes.graficosSalvos = lista(p.opcoes.graficosSalvos);
     Object.assign(p.relatorio, typeof d.relatorio === 'object' && d.relatorio ? d.relatorio : {});
     p.plantas = lista(d.plantas).map(normalizarPlanta);
+    if (d.acesso && typeof d.acesso === 'object') p.acesso = Object.assign(p.acesso, d.acesso);
     return p;
 }
 
@@ -230,6 +232,7 @@ function normalizarPlanta(d) {
         const n = criarEquipamento(texto(e.nome, 'Equipamento'), texto(e.areaId), texto(e.simbolo, 'motor'));
         n.id = e.id; n.descricao = texto(e.descricao); n.tagPotencia = texto(e.tagPotencia);
         Object.assign(n.horimetro, e.horimetro || {});
+        if (e.termometria && typeof e.termometria === 'object') n.termometria = e.termometria;
         return n;
     });
     const usadas = new Set();
@@ -253,6 +256,8 @@ function normalizarPlanta(d) {
     const s = d.sinotico || {};
     pl.sinotico = { largura: num(s.largura, 1600), altura: num(s.altura, 900), grade: num(s.grade, 10), elementos: lista(s.elementos).filter(e => e && e.id && e.s) };
     pl.simulacao = d.simulacao && typeof d.simulacao === 'object' ? d.simulacao : null;
+    ['gemeo', 'secagem'].forEach(k => { if (d[k] && typeof d[k] === 'object') pl[k] = d[k]; });
+    pl.lotes = lista(d.lotes);
     return pl;
 }
 

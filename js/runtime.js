@@ -117,7 +117,7 @@ function receber(pl, topico, bytes, info) {
         }
     });
     const tags = (RT.topicos.get(pl.id) || new Map()).get(topico);
-    if (!tags) return;
+    if (!tags) { if (typeof termoReceber === 'function') termoReceber(pl, topico, bytes, t); return; }
     for (const tag of tags) {
         const { v } = lerPayload(bytes, tag.caminhoJson);
         definirValor(pl, tag, Number.isFinite(v) ? v * num(tag.escala, 1) + num(tag.deslocamento, 0) : NaN, t, txt);
@@ -183,6 +183,7 @@ function assinarTopicos(pl) {
     const desc = RT.descobrindo.get(pl.id);
     if (desc) quero.set(desc, 0);
     if (RT.status.has(pl.id)) quero.set(RT.status.get(pl.id).topico, 0);
+    if (typeof termoFiltros === 'function') termoFiltros(pl).forEach(f => quero.set(f, num(pl.conexao.qos, 0)));
     for (const f of [...r.cliente.assinaturas.keys()]) if (!quero.has(f)) r.cliente.cancelar(f).catch(() => {});
     for (const [f, q] of quero) if (!r.cliente.assinaturas.has(f) || r.cliente.assinaturas.get(f) !== q) r.cliente.assinar(f, q).catch(e => logar('conexao', `Assinatura de "${f}" recusada: ${e.message}`, pl.nome, 'erro'));
 }
@@ -345,6 +346,8 @@ function ciclo() {
     if (typeof cicloSimulacao === 'function') cicloSimulacao(dt);
     if (RT.tick % 15 === 0) guardarAcumuladores();
     if (RT.tick % 60 === 0 && typeof nuvemHistoricoAutomatico === 'function') nuvemHistoricoAutomatico();
+    if (RT.tick % 60 === 5 && typeof termoCiclo === 'function') termoCiclo().catch(e => console.warn(e));
+    if (RT.tick % 10 === 3 && typeof lotesCiclo === 'function') lotesCiclo();
     agendarTela();
 }
 

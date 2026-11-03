@@ -184,6 +184,7 @@ function enviarHistoricoNuvem(forcarDias = 0) { return naFilaNuvem(async () => {
             const mes = diaISO(dia).slice(0, 7);
             const dirMes = await pasta(dirPl, mes);
             await enviarSubstituindo(dirMes, `${nomeSeguro(pl.nome)}-${diaISO(dia)}.zip`, blob);
+            NUVEM.tamanhos = NUVEM.tamanhos || {}; NUVEM.tamanhos[pl.id] = { dia: diaISO(dia), bytes: blob.size, fracao: dia === hoje ? Math.max(0.05, (Date.now() - hoje) / 86400000) : 1 };
             enviados++;
             if (dia < hoje) await histMetaGravar('nuvem:' + pl.id, dia);
         }

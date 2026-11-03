@@ -41,6 +41,7 @@ function topicosDaPlanta(pl, ultimos = new Map()) {
         else if (m.tipo === 'entrada') por(m.topico, { sentido: 'assina', tipo: 'entrada', nome: m.nome });
         else por(m.topico, { sentido: 'publica', tipo: 'medida', nome: m.nome, unidade: m.un || '' });
     });
+    pl.equipamentos.forEach(eq => { const tc = eq.termometria; if (tc && tc.ativo && tc.base) for (let c = 1; c <= tc.cabos; c++) for (let s = 1; s <= tc.sensores; s++) por(`${tc.base}/cabo${c}/s${s}`, { sentido: 'publica', tipo: 'termometria', nome: `Termometria ${eq.nome}: cabo ${c}, altura ${s}`, unidade: '°C', elemento: eq.nome }); });
     por('status/get', { sentido: 'assina', tipo: 'status', nome: 'Pedido de status (qualquer conteúdo)' });
     por('status', { sentido: 'publica', tipo: 'status', nome: 'Resposta de status: esta lista' });
     return [...out.values()].sort((a, b) => a.topico.localeCompare(b.topico));

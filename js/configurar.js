@@ -34,7 +34,7 @@ PAGINAS.configurar = {
         return `<div class="container">${cabecalho(`${icone('configurar')} Configurar`, 'Tudo é salvo sozinho neste navegador ao sair de cada campo. Para levar a outro computador: "Baixar arquivo" ou Nuvem da equipe.',
             `<select id="cfg-planta" aria-label="Planta">${pls.map(p => `<option value="${p.id}"${p === pl ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select>
              <button type="button" class="btn btn-secondary btn-sm" data-acao="planta-branco">${icone('mais')} Nova planta</button>`)}
-            <nav class="ancoras">${[['geral', 'Planta'], ['conexao', 'Conexão'], ['areas', 'Áreas'], ['equipamentos', 'Equipamentos e horímetros'], ['variaveis', 'Variáveis'], ['alarmes-eq', 'Alarmes por equação'], ['arquivo', 'Arquivo']].map(([a, n]) => `<a href="#/configurar/${pl.id}" data-acao="ir-ancora" data-a="${a}">${n}</a>`).join('')}</nav>
+            <nav class="ancoras">${[['geral', 'Planta'], ['conexao', 'Conexão'], ['areas', 'Áreas'], ['equipamentos', 'Equipamentos e horímetros'], ['variaveis', 'Variáveis'], ['alarmes-eq', 'Alarmes por equação'], ['acesso', 'Acesso'], ['arquivo', 'Arquivo']].map(([a, n]) => `<a href="#/configurar/${pl.id}" data-acao="ir-ancora" data-a="${a}">${n}</a>`).join('')}</nav>
 
             <section class="card" id="geral"><h2>Planta</h2><div class="grade-campos">
                 <label>Nome <input type="text" data-ref="pl:${pl.id}.nome" value="${escAttr(pl.nome)}" data-rerender></label>
@@ -85,6 +85,7 @@ PAGINAS.configurar = {
                     <label>Atraso (s) <input type="number" min="0" data-ref="ax:${a.id}.atrasoS" value="${a.atrasoS}"></label>
                     <button type="button" class="btn-icone" data-acao="cfg-ax-del" data-pl="${pl.id}" data-id="${a.id}" title="Excluir">${icone('lixo')}</button></div>`).join('') || '<p class="nota">Nenhum.</p>'}</section>
 
+            ${htmlAcessoConfig()}
             <section class="card" id="arquivo"><h2>Arquivo</h2><div class="botoes">
                 <button type="button" class="btn btn-secondary btn-sm" data-acao="baixar-arquivo">${icone('baixar')} Baixar arquivo (todas as plantas)</button>
                 <button type="button" class="btn btn-secondary btn-sm" data-acao="abrir-arquivo">📂 Abrir arquivo</button>
@@ -105,6 +106,16 @@ PAGINAS.configurar = {
     }
 };
 
+function htmlTermoConfig(pl, eq) {
+    const t = eq.termometria || {};
+    return `<label class="campo-inline largo"><input type="checkbox" data-ref="eq:${eq.id}.termometria.ativo"${t.ativo ? ' checked' : ''} data-depois="termo-config" data-pl="${pl.id}" data-eq="${eq.id}" data-rerender> Termometria por cabos (mapa de calor e ponto quente)</label>
+        ${t.ativo ? `<label>Cabos <input type="number" min="1" max="30" data-ref="eq:${eq.id}.termometria.cabos" value="${t.cabos}"></label>
+        <label>Sensores por cabo <input type="number" min="1" max="30" data-ref="eq:${eq.id}.termometria.sensores" value="${t.sensores}"></label>
+        <label>Tópico base <input type="text" data-ref="eq:${eq.id}.termometria.base" value="${escAttr(t.base || '')}" spellcheck="false"><small>os sensores publicam em <code>${esc(topicoCompleto(pl, t.base || '…'))}/cabo1/s1</code> (s1 embaixo)</small></label>
+        <label>Limite (°C) <input type="number" step="0.5" data-ref="eq:${eq.id}.termometria.limite" value="${t.limite}"></label>
+        <label>Ponto quente: subida acima de (°C/dia) <input type="number" step="0.1" data-ref="eq:${eq.id}.termometria.subidaDia" value="${t.subidaDia}"></label>
+        <p class="largo nota"><a href="#/termometria/${eq.id}">Ver o mapa da termometria</a></p>` : ''}`;
+}
 function htmlEquip(pl, eq) {
     const h = eq.horimetro;
     const fonte = SUP.tag(h.tagId);
@@ -114,6 +125,7 @@ function htmlEquip(pl, eq) {
             <label>Área <select data-ref="eq:${eq.id}.areaId">${optsArea(pl, eq.areaId)}</select></label>
             <label>Símbolo <select data-ref="eq:${eq.id}.simbolo">${Object.entries(SIMBOLOS).filter(([, S]) => S.equip).map(([k, S]) => `<option value="${k}"${k === eq.simbolo ? ' selected' : ''}>${esc(S.nome)}</option>`).join('')}</select></label>
             <label>Potência deste equipamento <select data-ref="eq:${eq.id}.tagPotencia">${optsTags(pl, eq.tagPotencia, t => t.tipo === 'potencia', '— (sem energia por estado)')}</select></label>
+            ${['silo', 'armazem', 'silo_pulmao'].includes(eq.simbolo) || eq.termometria ? htmlTermoConfig(pl, eq) : ''}
             <label class="campo-inline largo"><input type="checkbox" data-ref="eq:${eq.id}.horimetro.ativo"${h.ativo ? ' checked' : ''} data-rerender> Horímetro ligado</label>
             ${h.ativo ? `<label>Indica o funcionamento por <select data-ref="eq:${eq.id}.horimetro.fonte" data-rerender><option value="tag"${h.fonte === 'tag' ? ' selected' : ''}>uma variável e limites</option><option value="expr"${h.fonte === 'expr' ? ' selected' : ''}>equações</option></select></label>
             ${h.fonte === 'tag' ? `<label>Variável <select data-ref="eq:${eq.id}.horimetro.tagId">${optsTags(pl, h.tagId, t => ['corrente', 'potencia', 'estado', 'rotacao', 'velocidade', 'vazao', 'percentual', 'generico'].includes(t.tipo) || t.equipId === eq.id)}</select></label>
@@ -269,7 +281,8 @@ PAGINAS.nuvem = {
                 <div class="grade-campos grade-estreita">
                     <label>A cada (min) <input type="number" min="5" max="1440" data-ref="op.nuvemIntervaloMin" value="${op.nuvemIntervaloMin}"></label>
                     <label>Guardar no navegador por (dias) <input type="number" min="1" max="3650" data-ref="op.retencaoDias" value="${op.retencaoDias}"><small>o que for mais velho sai do navegador (continua na nuvem)</small></label></div>
-                <p class="nota">Último envio: ${NUVEM.ultimoEnvio ? dataHora(NUVEM.ultimoEnvio) : 'nenhum nesta sessão'}${NUVEM.ultimoErro ? ` · <span class="falta">erro: ${esc(NUVEM.ultimoErro)}</span>` : ''}. O envio só acontece com esta página aberta: deixe um computador da unidade com o supervisório aberto para não haver buracos.</p>
+                ${Object.keys(NUVEM.tamanhos || {}).length ? `<p class="nota">Tamanho na nuvem (estimativa pelo último arquivo de dia, projetado para o dia inteiro): ${SUP.p.plantas.filter(p => (NUVEM.tamanhos || {})[p.id]).map(p => { const x = NUVEM.tamanhos[p.id], dia = x.bytes / x.fracao; return `<b>${esc(p.nome)}</b> ≈ ${(dia / 1024).toFixed(0)} kB/dia, ${(dia * 30 / 1048576).toFixed(1)} MB/mês, ${(dia * 365 / 1073741824).toFixed(2)} GB/ano`; }).join(' · ')}. Subir arquivos não gasta a cota de transferência do MEGA; baixar (gráficos, relatórios, gêmeo) gasta.</p>` : ''}
+                <p class="nota">Último envio: ${NUVEM.ultimoEnvio ? dataHora(NUVEM.ultimoEnvio) : 'nenhum nesta sessão'}${NUVEM.ultimoErro ? ` · <span class="falta">erro: ${esc(NUVEM.ultimoErro)}</span>` : ''}. O envio só acontece com esta página aberta, ou com o <b>agente de borda</b> rodando 24 h num computador da unidade (<code>node agente/agente.js</code>, ver agente/LEIAME.md).</p>
                 <div class="botoes"><button type="button" class="btn btn-primary btn-sm" data-acao="nuvem-enviar-hist">${icone('nuvem')} Enviar agora</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-acao="nuvem-enviar-7">Reenviar os últimos 7 dias</button>
                     <button type="button" class="btn btn-secondary btn-sm" data-acao="hist-importar-zip">📂 Importar arquivo de dia (.zip)</button></div>
@@ -330,6 +343,11 @@ function htmlGemeo() {
         <div class="botoes"><button type="button" class="btn btn-secondary btn-sm" data-acao="gemeo-listar">Ver plantas enviadas por originais</button></div><div id="gemeo-lista"></div></section>`;
 }
 Object.assign(ACOES, {
+    'termo-config': el => {
+        const pl = SUP.planta(el.dataset.pl), eq = SUP.equipamento(el.dataset.eq), t = eq.termometria;
+        if (t && t.ativo && !t.base) Object.assign(t, { cabos: t.cabos || 5, sensores: t.sensores || 8, base: `${topicoBaseEquip(pl, eq)}/termometria`, limite: t.limite || 28, subidaDia: t.subidaDia || 2 });
+        SUP.alterado('pl'); renderMenu();
+    },
     'excluir-eq': async b => {
         const pl = SUP.planta(b.dataset.pl), eq = SUP.equipamento(b.dataset.eq);
         if (!eq || !(await confirmar(`Excluir "${esc(eq.nome)}"?`, 'Apaga o elemento, as variáveis, os comandos, os sensores presos a ele, o desenho e as linhas ligadas. O histórico já gravado continua.', { botao: 'Excluir', perigo: true }))) return;
