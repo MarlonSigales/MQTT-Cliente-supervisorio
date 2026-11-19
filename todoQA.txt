@@ -262,3 +262,7 @@ Atualizado em 19/11/2026 (versão 6.2). Os números são fixos (servem de refer�
    com Mosquitto, MariaDB, o main.py novo e um SMTP local com STARTTLS e senha: salvar (config_local.json + crontab
    06:30), e-mail de teste, cadastro válido e inválido, envio de um usuário, remoção, enviar tudo (banco limpo) e Wi-Fi;
    4 e-mails conferidos no SMTP; 360/1024 px sem rolagem lateral. Não testado: a placa real e o Gmail de verdade.
+63 [resolvido] Troca de placa (Zero 2 → Zero 3): o certificado novo tinha o mesmo nome do antigo e o Firefox usava o
+   antigo. O aviso da Conexão e a falha de conexão lembram de remover o certificado antigo; a página da placa (8080)
+   mostra o nome e a impressão digital do certificado e ensina a remover os antigos em Firefox, Chrome/Edge, Android e
+   iPhone; o gerar_tls.sh passou a dar nome único a cada CA (placa + data). QA: 37 testes ok.

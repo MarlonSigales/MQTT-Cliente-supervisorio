@@ -186,7 +186,7 @@ class ClienteMQTT extends Emissor {
             if (!abriu) msg = location.protocol === 'https:' && /^ws:/i.test(this.o.url)
                 ? 'página em https só conecta em wss:// (use a porta segura do broker, ex.: 8084)'
                 : paginaCertificado(this.o.url)
-                    ? `não consegui abrir a conexão segura: se é a primeira vez neste aparelho, instale o certificado do servidor em ${paginaCertificado(this.o.url)} e reabra o navegador (se já instalou, confira o endereço e a porta)`
+                    ? `não consegui abrir a conexão segura: se é a primeira vez neste aparelho, instale o certificado do servidor em ${paginaCertificado(this.o.url)} e reabra o navegador (se já instalou e trocou de placa, remova o certificado antigo; senão, confira o endereço e a porta)`
                     : 'não consegui abrir o WebSocket (endereço, porta ou caminho /mqtt errados, broker fora do ar ou rede bloqueando)';
             else if (era === 'conectando') msg = this._recusa || 'o broker fechou a conexão durante a entrada';
             this._mudar('erro', msg + (ev && ev.code && ev.code !== 1006 ? ` (código ${ev.code})` : ''));
