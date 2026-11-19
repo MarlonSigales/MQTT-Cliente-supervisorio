@@ -9,6 +9,7 @@
 'use strict';
 
 const PRESETS_BROKER = [
+    ['Servidor MQTT agrícola (Orange Pi) — wss 9443', 'wss://10.0.0.100:9443'],
     ['EMQX público — wss 8084', 'wss://broker.emqx.io:8084/mqtt'],
     ['HiveMQ público — wss 8884', 'wss://broker.hivemq.com:8884/mqtt'],
     ['EMQX na rede local — ws 8083', 'ws://192.168.0.10:8083/mqtt'],
@@ -31,6 +32,7 @@ PAGINAS.configurar = {
         const pl = SUP.planta(id) || pls[0];
         const c = pl.conexao, publico = /emqx\.io|hivemq\.com|mosquitto\.org/i.test(c.url);
         const ehHttps = location.protocol === 'https:';
+        const cert = c.tipo === 'mqtt' ? paginaCertificado(c.url) : '';
         return `<div class="container">${cabecalho(`${icone('configurar')} Configurar`, 'Tudo é salvo sozinho neste navegador ao sair de cada campo. Para levar a outro computador: "Baixar arquivo" ou Nuvem da equipe.',
             `<select id="cfg-planta" aria-label="Planta">${pls.map(p => `<option value="${p.id}"${p === pl ? ' selected' : ''}>${esc(p.nome)}</option>`).join('')}</select>
              <button type="button" class="btn btn-secondary btn-sm" data-acao="planta-branco">${icone('mais')} Nova planta</button>`)}
@@ -51,6 +53,8 @@ PAGINAS.configurar = {
                     <label class="largo">Endereço WebSocket do broker <input type="text" data-ref="pl:${pl.id}.conexao.url" value="${escAttr(c.url)}" placeholder="wss://servidor:8084/mqtt" spellcheck="false">
                         <small>O navegador só fala MQTT por WebSocket. EMQX: 8083 (ws) e 8084 (wss), caminho /mqtt. Mosquitto: a porta do <code>listener … protocol websockets</code>.${ehHttps ? ' Esta página está em https: use <b>wss://</b>.' : ''}</small></label>
                     <div class="largo chips"><span class="chips-rotulo">Prontos:</span>${PRESETS_BROKER.map(([n, u]) => `<button type="button" class="chip" data-acao="cfg-preset" data-pl="${pl.id}" data-url="${escAttr(u)}">${esc(n)}</button>`).join('')}</div>
+                    ${cert ? `<p class="largo aviso-inline aviso-cert">${estadoConexao(pl.id) === 'erro' ? '<b>Sem conexão?</b> ' : ''}Servidor local com certificado próprio: instale o certificado dele uma vez em cada computador ou celular (a página explica como) e reabra o navegador. Sem ele, o navegador recusa a conexão segura.
+                        <a class="btn btn-secondary btn-sm" href="${escAttr(cert)}" target="_blank" rel="noopener">⬇ Baixar o certificado do servidor</a></p>` : ''}
                     ${publico ? `<p class="largo aviso-inline">Broker público: qualquer pessoa na internet pode ler e publicar nestes tópicos. Use só para testes; para comandar equipamento real use um broker com usuário e senha (e TLS).</p>` : ''}
                     <label>Usuário <input type="text" data-ref="pl:${pl.id}.conexao.usuario" value="${escAttr(c.usuario)}" autocomplete="off"></label>
                     <label>Senha <input type="password" id="cfg-senha" value="${escAttr(Senhas.de(pl.id))}" autocomplete="new-password" placeholder="fica só neste navegador"></label>

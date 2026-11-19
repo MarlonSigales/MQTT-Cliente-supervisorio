@@ -25,6 +25,20 @@ const MQTT_CONNACK = { 1: 'versão do protocolo recusada', 2: 'identificador do 
     0x85: 'identificador do cliente recusado', 0x86: 'usuário ou senha incorretos', 0x87: 'sem autorização', 0x88: 'servidor indisponível',
     0x89: 'servidor ocupado', 0x8A: 'cliente banido', 0x8C: 'método de autenticação errado', 0x95: 'pacote grande demais', 0x97: 'cota excedida' };
 
+/**
+ * Servidor local com certificado próprio (ex.: Orange Pi com gerar_tls.sh): o navegador recusa o wss:// até o certificado
+ * da autoridade dele ser instalado. A placa serve esse certificado em http://<endereço>:8080.
+ * Devolve o endereço da página para wss:// em IP privado, .local ou nome sem ponto; senão ''.
+ */
+function paginaCertificado(url) {
+    const m = /^wss:\/\/(\[[^\]]+\]|[^\/:?#]+)/i.exec(String(url || '').trim());
+    if (!m) return '';
+    const h = m[1].toLowerCase();
+    const local = /^(10|127)\.\d+\.\d+\.\d+$/.test(h) || /^192\.168\.\d+\.\d+$/.test(h) || /^169\.254\.\d+\.\d+$/.test(h)
+        || /^172\.(1[6-9]|2\d|3[01])\.\d+\.\d+$/.test(h) || /\.local$/.test(h) || (!h.includes('.') && !h.startsWith('['));
+    return local ? `http://${h}:8080` : '';
+}
+
 const _enc = new TextEncoder(), _dec = new TextDecoder();
 
 /** O filtro de assinatura (com + e #) casa com o tópico? */
@@ -171,7 +185,9 @@ class ClienteMQTT extends Emissor {
             let msg = 'conexão perdida';
             if (!abriu) msg = location.protocol === 'https:' && /^ws:/i.test(this.o.url)
                 ? 'página em https só conecta em wss:// (use a porta segura do broker, ex.: 8084)'
-                : 'não consegui abrir o WebSocket (endereço, porta ou caminho /mqtt errados, broker fora do ar ou rede bloqueando)';
+                : paginaCertificado(this.o.url)
+                    ? `não consegui abrir a conexão segura: se é a primeira vez neste aparelho, instale o certificado do servidor em ${paginaCertificado(this.o.url)} e reabra o navegador (se já instalou, confira o endereço e a porta)`
+                    : 'não consegui abrir o WebSocket (endereço, porta ou caminho /mqtt errados, broker fora do ar ou rede bloqueando)';
             else if (era === 'conectando') msg = this._recusa || 'o broker fechou a conexão durante a entrada';
             this._mudar('erro', msg + (ev && ev.code && ev.code !== 1006 ? ` (código ${ev.code})` : ''));
             this.pendentes.forEach(p => p.reject(new Error('conexão perdida antes da confirmação')));

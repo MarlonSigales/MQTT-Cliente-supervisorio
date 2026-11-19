@@ -657,6 +657,19 @@ function megaSimulado() {
     return { Storage: class { constructor() { this.root = pasta('raiz'); this.ready = Promise.resolve(); } close() {} } };
 }
 
+// ---------------------------------------------------------------- certificado do servidor local
+teste('Servidor local com certificado próprio: página do certificado e conexão rápida', () => {
+    igual(paginaCertificado('wss://10.0.0.100:9443'), 'http://10.0.0.100:8080');
+    igual(paginaCertificado('wss://192.168.1.5:9443/mqtt'), 'http://192.168.1.5:8080');
+    igual(paginaCertificado('wss://172.20.0.3:9443'), 'http://172.20.0.3:8080');
+    igual(paginaCertificado('wss://orangepizero2.local:9443'), 'http://orangepizero2.local:8080');
+    igual(paginaCertificado('wss://orangepizero2:9443'), 'http://orangepizero2:8080');
+    igual(paginaCertificado('wss://broker.emqx.io:8084/mqtt'), '', 'broker público não tem página');
+    igual(paginaCertificado('ws://10.0.0.100:9001'), '', 'ws sem TLS não precisa de certificado');
+    igual(paginaCertificado('wss://172.32.0.1:9443'), '', '172.32 não é rede privada');
+    ok(PRESETS_BROKER.some(([n, u]) => u === 'wss://10.0.0.100:9443' && /Orange Pi/.test(n)), 'falta a conexão rápida do servidor');
+});
+
 // ---------------------------------------------------------------- execução
 (async () => {
     const lst = document.getElementById('lista');

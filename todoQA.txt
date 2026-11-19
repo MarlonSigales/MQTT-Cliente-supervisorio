@@ -2,7 +2,7 @@
 
 TODO / QA — Supervisório MQTT (cliente MQTT supervisório)
 Marcadores: [fazer] [futuro] [resolvido] [rejeitado] [parcial]
-Atualizado em 03/11/2026 (versão 6). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
+Atualizado em 19/11/2026 (versão 6.1). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
 
 === DIRETRIZES PERMANENTES
 - SIMPLES PARA QUALQUER UM: um operador de unidade armazenadora tem que conseguir usar sem ler manual.
@@ -244,4 +244,11 @@ Atualizado em 03/11/2026 (versão 6). Os números são fixos (servem de referên
    cliente MQTT 3.1.1 e 5 contra o broker de teste (QoS 0/1/2, retidos, cancelar, recusa de senha em MQTT 5);
    telas de termometria, lotes e sinótico em 1400/390 px sem rolagem lateral. Não testado: MEGA real, broker.emqx.io
    (rede do ambiente de testes bloqueia) e instalação do app num celular.
-
+61 [resolvido] Servidor local com certificado próprio (Orange Pi do servidor MQTT agrícola, TLS pelo gerar_tls.sh):
+   conexão rápida "Servidor MQTT agrícola (Orange Pi) — wss 9443" (wss://10.0.0.100:9443) nos Prontos; para wss:// em IP
+   privado, .local ou nome sem ponto, a Conexão mostra o aviso com "Baixar o certificado do servidor" (página da placa em
+   http://<endereço>:8080, com o passo a passo para Windows, Firefox, Android e iPhone) e a falha de conexão diz onde
+   instalar o certificado.
+   QA: 36 testes automáticos ok (novo: página do certificado e conexão rápida); conexão real contra Mosquitto 2.0.18 com o
+   TLS do gerar_tls.sh: sem o certificado aceito cai na mensagem com o endereço da página; com ele, conecta em wss://.
+   Conexão em 360/1024/1920 px sem rolagem lateral. Não testado: a placa real (IP 10.0.0.100) e a instalação nos celulares.
