@@ -670,6 +670,40 @@ teste('Servidor local com certificado próprio: página do certificado e conexã
     ok(PRESETS_BROKER.some(([n, u]) => u === 'wss://10.0.0.100:9443' && /Orange Pi/.test(n)), 'falta a conexão rápida do servidor');
 });
 
+// ---------------------------------------------------------------- servidor agrícola
+teste('Servidor agrícola: detecção pelo SERVIDOR/info, resposta casada pelo id e tópicos assinados', async () => {
+    const pl = plantaEmBranco('Teste servidor'); pl.conexao.tipo = 'mqtt';
+    SUP.p.plantas.push(pl);
+    const publicados = [];
+    RT.con.set(pl.id, { estado: 'conectado', cliente: { publicar: async (t, p) => { publicados.push([t, p]); } } });
+    try {
+        igual(servidorFiltros(pl).join(' '), 'SERVIDOR/info SERVIDOR/resposta');
+        ok(!plantasComServidor().includes(pl), 'sem info não aparece');
+        servidorReceber(pl, 'SERVIDOR/info', _enc.encode(JSON.stringify({ servidor: 'outro' })));
+        ok(!plantasComServidor().includes(pl), 'outro servidor não conta');
+        servidorReceber(pl, 'SERVIDOR/info', _enc.encode(JSON.stringify({ servidor: 'mqtt-agricola', versao: 'x', online: true })));
+        ok(plantasComServidor().includes(pl), 'servidor no ar aparece');
+        ok(itensMenu().some(([r]) => r === 'servidor'), 'menu ganha a página');
+        const p = pedirServidor(pl, 'config/set', { config: { smtp_senha: 'segredo' } }, 'teste', 2);
+        await new Promise(r => setTimeout(r, 0));
+        igual(publicados.length, 1); igual(publicados[0][0], 'SERVIDOR/config/set');
+        const id = JSON.parse(publicados[0][1]).id;
+        ok(!RT.monitor.some(m => /segredo/.test(m.txt)), 'a senha não vai para o monitor');
+        servidorReceber(pl, 'SERVIDOR/resposta', _enc.encode(JSON.stringify({ id: 'outro', ok: true })));
+        servidorReceber(pl, 'SERVIDOR/resposta', _enc.encode(JSON.stringify({ id, ok: true, msg: 'salvo', config: { smtp_login: 'a@b.c', senha_definida: true } })));
+        const r = await p;
+        igual(r.msg, 'salvo'); igual(srvDe(pl.id).config.smtp_login, 'a@b.c');
+        const p2 = pedirServidor(pl, 'usuarios/add', { nome: 'X' }, '', 2);
+        await new Promise(r => setTimeout(r, 0));
+        servidorReceber(pl, 'SERVIDOR/resposta', _enc.encode(JSON.stringify({ id: JSON.parse(publicados[1][1]).id, ok: false, msg: 'e-mail inválido' })));
+        let erro = ''; try { await p2; } catch (e) { erro = e.message; }
+        igual(erro, 'e-mail inválido');
+        servidorReceber(pl, 'SERVIDOR/info', _enc.encode(JSON.stringify({ servidor: 'mqtt-agricola', online: false })));
+        ok(!plantasComServidor().includes(pl), 'servidor fora do ar some do menu');
+        ok(PAGINAS_PERFIL.servidor === 'engenheiro', 'página só para engenheiro');
+    } finally { RT.con.delete(pl.id); SUP.p.plantas.splice(SUP.p.plantas.indexOf(pl), 1); SRV.delete(pl.id); }
+});
+
 // ---------------------------------------------------------------- execução
 (async () => {
     const lst = document.getElementById('lista');

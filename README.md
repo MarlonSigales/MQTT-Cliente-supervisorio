@@ -39,6 +39,13 @@ Feito para unidades de pós-colheita e armazenagem, laboratórios e pequenas ind
   gêmeo, em outro lugar e sem broker, é um supervisório completo com esses dados e manda comandos por outro arquivo, que o
   original executa e confirma.
 
+## Servidor agrícola (Orange Pi)
+
+Com o broker do servidor MQTT agrícola (Orange Pi do TCC "Desenvolvimento de uma rede baseada no protocolo MQTT para
+aplicações agrícolas"), aparece no menu a página **Servidor agrícola** (perfil engenheiro): e-mail que envia os dados,
+horário do envio diário, usuários, envio na hora e Wi-Fi da placa. Conexão rápida em Configurar → Conexão:
+`wss://10.0.0.100:9443` (certificado da placa em `http://10.0.0.100:8080`).
+
 ## Conectar no broker
 
 O navegador só fala MQTT por **WebSocket**. EMQX: `ws://servidor:8083/mqtt` e `wss://servidor:8084/mqtt`; Mosquitto: a porta do

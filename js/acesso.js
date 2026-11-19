@@ -25,7 +25,7 @@ const ACOES_PERFIL = {
     'hist-apagar': 'engenheiro', 'lote-iniciar': 'tecnico', 'lote-encerrar': 'tecnico', 'termo-config': 'engenheiro', 'importar-csv': 'engenheiro'
 };
 /** Telas que só abrem a partir de um perfil. */
-const PAGINAS_PERFIL = { configurar: 'engenheiro', controle: 'engenheiro', nuvem: 'engenheiro' };
+const PAGINAS_PERFIL = { configurar: 'engenheiro', controle: 'engenheiro', nuvem: 'engenheiro', servidor: 'engenheiro' };
 
 function acessoAtivo() { return !!(SUP.p.acesso && SUP.p.acesso.ativo); }
 function perfilAtual() { return acessoAtivo() ? ACESSO.perfil : 'engenheiro'; }

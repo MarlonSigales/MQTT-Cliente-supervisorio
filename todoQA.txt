@@ -2,7 +2,7 @@
 
 TODO / QA — Supervisório MQTT (cliente MQTT supervisório)
 Marcadores: [fazer] [futuro] [resolvido] [rejeitado] [parcial]
-Atualizado em 19/11/2026 (versão 6.1). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
+Atualizado em 19/11/2026 (versão 6.2). Os números são fixos (servem de referência); a ordem dentro de cada parte é do mais simples para o mais difícil.
 
 === DIRETRIZES PERMANENTES
 - SIMPLES PARA QUALQUER UM: um operador de unidade armazenadora tem que conseguir usar sem ler manual.
@@ -252,3 +252,13 @@ Atualizado em 19/11/2026 (versão 6.1). Os números são fixos (servem de refer�
    QA: 36 testes automáticos ok (novo: página do certificado e conexão rápida); conexão real contra Mosquitto 2.0.18 com o
    TLS do gerar_tls.sh: sem o certificado aceito cai na mensagem com o endereço da página; com ele, conecta em wss://.
    Conexão em 360/1024/1920 px sem rolagem lateral. Não testado: a placa real (IP 10.0.0.100) e a instalação nos celulares.
+62 [resolvido] Página "Servidor agrícola" (servidor MQTT de baixo custo do TCC de Jean Pietro Colet De Carli, Orange Pi):
+   ao conectar no broker dele, o servidor publica SERVIDOR/info (retido; "online": false pelo Last Will quando o main.py
+   cai) e a página aparece no menu (perfil engenheiro). Configura o e-mail que envia (conta, senha de app só de escrita,
+   e-mail geral, SMTP/porta), o horário do envio diário (crontab da placa), cadastra/remove usuários, envia os dados de
+   um usuário ou tudo (com limpeza do banco) e troca o Wi-Fi da placa. Pedido em SERVIDOR/<ação> com id, resposta em
+   SERVIDOR/resposta; a senha não vai para o log nem para o monitor MQTT.
+   QA: 37 testes automáticos ok (novo: detecção, resposta pelo id, erro, senha fora do monitor, perfil); ponta a ponta
+   com Mosquitto, MariaDB, o main.py novo e um SMTP local com STARTTLS e senha: salvar (config_local.json + crontab
+   06:30), e-mail de teste, cadastro válido e inválido, envio de um usuário, remoção, enviar tudo (banco limpo) e Wi-Fi;
+   4 e-mails conferidos no SMTP; 360/1024 px sem rolagem lateral. Não testado: a placa real e o Gmail de verdade.

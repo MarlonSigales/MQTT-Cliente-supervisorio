@@ -107,6 +107,7 @@ function receber(pl, topico, bytes, info) {
     const txt = bytes.length > 300 ? _dec.decode(bytes.subarray(0, 300)) + '…' : _dec.decode(bytes);
     RT.monitor.push({ t, pl: pl.nome, plId: pl.id, dir: 'rx', topico, txt, qos: info.qos, retain: info.retain });
     if (RT.monitor.length > MONITOR_MAX) RT.monitor.splice(0, RT.monitor.length - MONITOR_MAX);
+    if (topico.startsWith('SERVIDOR/') && typeof servidorReceber === 'function') servidorReceber(pl, topico, bytes);
     const sp = typeof lerSparkplug === 'function' && topico.startsWith('spBv1.0/') ? lerSparkplug(topico, bytes) : null;
     const desc = RT.descobertos.get(pl.id);
     if (desc && RT.descobrindo.has(pl.id)) {
@@ -196,6 +197,7 @@ function assinarTopicos(pl) {
     if (desc) quero.set(desc, 0);
     if (RT.status.has(pl.id)) quero.set(RT.status.get(pl.id).topico, 0);
     if (typeof termoFiltros === 'function') termoFiltros(pl).forEach(f => quero.set(f, num(pl.conexao.qos, 0)));
+    if (typeof servidorFiltros === 'function') servidorFiltros(pl).forEach(f => quero.set(f, 1));
     for (const f of [...r.cliente.assinaturas.keys()]) if (!quero.has(f)) r.cliente.cancelar(f).catch(() => {});
     for (const [f, q] of quero) if (!r.cliente.assinaturas.has(f) || r.cliente.assinaturas.get(f) !== q) r.cliente.assinar(f, q).catch(e => logar('conexao', `Assinatura de "${f}" recusada: ${e.message}`, pl.nome, 'erro'));
 }

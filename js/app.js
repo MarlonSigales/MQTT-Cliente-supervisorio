@@ -8,7 +8,7 @@
 
 'use strict';
 
-const App = { rota: 'inicio', param: '', pagina: null, versao: '20261119a' };
+const App = { rota: 'inicio', param: '', pagina: null, versao: '20261119b' };
 const PAGINAS = {};        // nome → { titulo, render(param) → html, montar?(raiz, param), atualizar?(sujos, forcar) }
 const ACOES = {};          // data-acao → função(botão, evento)
 
@@ -209,7 +209,8 @@ function itensMenu() {
         ...(typeof lotesAtivo === 'function' && SUP.p.plantas.some(lotesAtivo) ? [['lotes', 'Lotes de secagem', 'umidade_grao']] : []),
         ['logs', 'Logs e MQTT', 'logs'],
         ['controle', 'Controle', 'controle'], ['horimetros', 'Horímetros e energia', 'horimetro'], ['relatorios', 'Relatórios', 'relatorio'],
-        ['configurar', 'Configurar', 'configurar'], ['nuvem', 'Nuvem da equipe', 'nuvem']);
+        ['configurar', 'Configurar', 'configurar'], ['nuvem', 'Nuvem da equipe', 'nuvem'],
+        ...(typeof plantasComServidor === 'function' && plantasComServidor().length ? [['servidor', 'Servidor agrícola', 'servidor']] : []));
     return itens;
 }
 function renderMenu() {
